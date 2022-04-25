@@ -12,16 +12,18 @@ It lets you to build 3D AI environments to train your AI agents that learn from 
 
 ### Usage
 
-1. Define Action Spac eand Application State
+#### 1. Define Action Space and Application State
 
 ```rust
+
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 enum AppState {
-    InGame,
-    Control,
-    Reset,
+    InGame,  // Actve state
+    Control, // A paused state in which application waits for agent input
+    Reset,   // A request to reset environment state
 }
 
+// List of possible agent actions (discrete variant)
 bitflags! {
     #[derive(Default)]
     pub struct PlayerActionFlags: u32 {
@@ -37,39 +39,42 @@ bitflags! {
 }
 ```
 
-2. Enable AI Gym across your application
+#### 2. Enable AI Gym Plugin
 
 ```rust
-    app
-        .insert_resource(AIGymSettings { \\ viewport settings
-            width: 768,  
-            height: 768,
-        })
-        .insert_resource(Arc::new(Mutex::new(AIGymState::<PlayerActionFlags> { \\ user-defined action space
-            ..Default::default()
-        })));
+app
+    // Plugin settings
+    .insert_resource(AIGymSettings { \\ viewport settings
+        width: 768,  
+        height: 768,
+    })
+    
+    // Actions
+    .insert_resource(Arc::new(Mutex::new(AIGymState::<PlayerActionFlags> { 
+        ..Default::default()
+    })))
+
+    // Plugin
+    .add_plugin(AIGymPlugin::<PlayerActionFlags>::default());
 ```
 
-3. Define a application state which awaits for agent action
+#### 3. Handling Agent Actions
 
 ```rust
-struct DelayedControlTimer(Timer); \\ Descreet timesteps in which agent input is expected
+struct DelayedControlTimer(Timer); 
 ```
 
 ```rust
- 
-        app.insert_resource(DelayedControlTimer(Timer::from_seconds(0.1, true))); \\ 10 Hz
-
-        app.add_system_set(
-            SystemSet::on_update(AppState::Control)
-                // Game Systems
-                .with_system(turnbased_text_control_system) \\ System that parses user command
-                .with_system(execute_reset_request),        \\ System that performs environment state reset
-        );
-    }
+app.insert_resource(DelayedControlTimer(Timer::from_seconds(0.1, true))); // 10 Hz
+app.add_system_set(
+    SystemSet::on_update(AppState::Control)
+        // Game Systems
+        .with_system(turnbased_text_control_system) // System that parses user command
+        .with_system(execute_reset_request),        // System that performs environment state reset
+);
 ```
 
-4. Handling agent actions
+#### 4. Handling Agent Actions
 
 ```rust
 fn turnbased_text_control_system(
@@ -78,7 +83,6 @@ fn turnbased_text_control_system(
 ) {
 
     // Acquire communication channels
-
     let step_rx: Receiver<String>;
     let result_tx: Sender<bool>;
     {
@@ -87,6 +91,7 @@ fn turnbased_text_control_system(
         result_tx = ai_gym_state.__result_channel_tx.clone(); // Sender channel 
     }
 
+    // Return if no input provided from rest API
     if step_rx.is_empty() {
         return;
     }
@@ -109,23 +114,19 @@ fn turnbased_text_control_system(
         return;
     }
 
-    // Calculate current step's environment rewards
+    // Set reward and whether simulation is terminated
     let score = 1;
     ai_gym_state.rewards.push(score as f32);
     ai_gym_state.is_terminated = false;
     
-
-    // Resume time in environment
-    // 
     // # CONTROL AGENT IN ENVIRONMENT HERE
-    //
-    // Put environment in previous state
-
+    
+    // Set environment to previous state
     app_state.pop().unwrap();
 }
 ```
 
-5. Handling environment reset requests
+#### 5. Handling Environment Reset
 
 ```rust
 fn execute_reset_request(
@@ -152,7 +153,7 @@ fn execute_reset_request(
 }
 ```
 
-6. Switch system to control state
+#### 6. Switching Environment to Control State
 
 ```rust
 fn turnbased_control_system_switch(
@@ -177,17 +178,15 @@ fn turnbased_control_system_switch(
 
 **First Person camera pixels**
 
-GET http://localhost:7878/screen.png
+GET `http://localhost:7878/screen.png`
 
 **Reset Environment**
 
-POST http://localhost:7878/reset
+POST `http://localhost:7878/reset`
 
 **Perform Action**
 
-POST http://localhost:7878/step TURN_LEFT
-
-Reset and Step handles would return current state, is_terminated flag and reward as json
+POST `http://localhost:7878/step` body=ACTION
 
 ### Example usage
 
@@ -195,8 +194,7 @@ Reset and Step handles would return current state, is_terminated flag and reward
 
 ### Limitations
 
-`bevy_rl` is in early stage of development and has following limitations:
+`bevy_rl` is early stage of development and has following limitations:
 
 1. Raw pixels are from GPU buffer and do not contain pixels from 2D camera
-2. You must be careful with sending signals to step and reset requests
-3. Set `is_terminated` and `reward` in your `turnbased_control_system`.
+2. You must be careful with sending signals to step and reset requests or application can deadlock

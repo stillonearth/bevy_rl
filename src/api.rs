@@ -13,7 +13,6 @@ use futures::executor;
 use image;
 use std::io::Cursor;
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
 
 use crate::state;
 
@@ -117,17 +116,16 @@ fn reset<T: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe>(
     state: State,
 ) -> (State, String) {
     let reset_channel_tx: Sender<bool>;
-    let result_rx: Receiver<bool>;
-
+    let reset_result_channel_rx: Receiver<bool>;
     {
         let state_: &GothamState<T> = GothamState::borrow_from(&state);
         let ai_gym_state = state_.inner.lock().unwrap();
         reset_channel_tx = ai_gym_state.__reset_channel_tx.clone();
-        result_rx = ai_gym_state.__result_reset_rx.clone();
+        reset_result_channel_rx = ai_gym_state.__result_reset_channel_rx.clone();
     }
 
     reset_channel_tx.send(true).unwrap();
-    result_rx.recv().unwrap();
+    reset_result_channel_rx.recv().unwrap();
 
     return (state, "ok".to_string());
 }

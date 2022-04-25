@@ -21,7 +21,7 @@ pub struct AIGymState<A: 'static + Send + Sync + Clone + std::panic::RefUnwindSa
     pub __result_channel_rx: Receiver<bool>,
 
     pub __result_reset_channel_tx: Sender<bool>,
-    pub __result_reset_rx: Receiver<bool>,
+    pub __result_reset_channel_rx: Receiver<bool>,
 
     // State
     pub screen: Option<image::RgbaImage>,
@@ -46,7 +46,7 @@ impl<A: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe> Default for A
             __render_target: None,
             __render_image_handle: None,
             __result_reset_channel_tx: result_reset_tx,
-            __result_reset_rx: result_reset_rx,
+            __result_reset_channel_rx: result_reset_rx,
             screen: None,
             rewards: Vec::new(),
             action: None,
