@@ -58,7 +58,7 @@ app
     .add_plugin(AIGymPlugin::<PlayerActionFlags>::default());
 ```
 
-#### 3. Handling Agent Actions
+#### 3. Making sure environment is discreet
 
 ```rust
 struct DelayedControlTimer(Timer); 
@@ -72,6 +72,30 @@ app.add_system_set(
         .with_system(turnbased_text_control_system) // System that parses user command
         .with_system(execute_reset_request),        // System that performs environment state reset
 );
+
+
+app.add_system_set(
+    SystemSet::on_update(AppState::InGame)
+        .with_system(turnbased_control_system_switch),
+);
+
+```
+
+```rust
+fn turnbased_control_system_switch(
+    mut app_state: ResMut<State<AppState>>,
+    time: Res<Time>,
+    mut timer: ResMut<DelayedControlTimer>,
+    ai_gym_state: ResMut<Arc<Mutex<AIGymState<PlayerActionFlags>>>>,
+) {
+    if timer.0.tick(time.delta()).just_finished() {
+        app_state.push(AppState::Control);
+        physics_time.pause();
+
+        let ai_gym_state = ai_gym_state.lock().unwrap();
+        ai_gym_state.send_step_result(true);
+    }
+}
 ```
 
 #### 4. Handling Agent Actions
@@ -81,47 +105,49 @@ fn turnbased_text_control_system(
     ai_gym_state: ResMut<Arc<Mutex<AIGymState<PlayerActionFlags>>>>,
     mut app_state: ResMut<State<AppState>>,
 ) {
+    let mut ai_gym_state = ai_gym_state.lock().unwrap();
 
-    // Acquire communication channels
-    let step_rx: Receiver<String>;
-    let result_tx: Sender<bool>;
-    {
-        let ai_gym_state = ai_gym_state.lock().unwrap();
-        step_rx = ai_gym_state.__step_channel_rx.clone(); // Receiver channel for agent actions
-        result_tx = ai_gym_state.__result_channel_tx.clone(); // Sender channel 
-    }
-
-    // Return if no input provided from rest API
-    if step_rx.is_empty() {
+    if !ai_gym_state.is_next_action() {
         return;
     }
 
-    let unparsed_action = step_rx.recv().unwrap();
+    let unparsed_action = ai_gym_state.receive_action_string();
+
     if unparsed_action == "" {
-        // Send negative signal to REST API if action wasn't successful
-        result_tx.send(false).unwrap();
+        ai_gym_state.send_step_result(false);
         return;
     }
 
-    // Parse an action
     let action = match unparsed_action.as_str() {
-        // # PARSE ACTION STRING HERE
+        "FORWARD" => Some(PlayerActionFlags::FORWARD),
+        "BACKWARD" => Some(PlayerActionFlags::BACKWARD),
+        "LEFT" => Some(PlayerActionFlags::LEFT),
+        "RIGHT" => Some(PlayerActionFlags::RIGHT),
+        "TURN_LEFT" => Some(PlayerActionFlags::TURN_LEFT),
+        "TURN_RIGHT" => Some(PlayerActionFlags::TURN_RIGHT),
+        "SHOOT" => Some(PlayerActionFlags::SHOOT),
+        _ => None,
     };
 
     if action.is_none() {
-        // Send negative signal to REST API if action wasn't successful
-        result_tx.send(false).unwrap(); 
+        ai_gym_state.send_step_result(false);
         return;
     }
 
-    // Set reward and whether simulation is terminated
-    let score = 1;
-    ai_gym_state.rewards.push(score as f32);
-    ai_gym_state.is_terminated = false;
-    
-    // # CONTROL AGENT IN ENVIRONMENT HERE
-    
-    // Set environment to previous state
+    let player = player_query.iter().find(|e| e.name == "Player 1").unwrap();
+    {
+        ai_gym_state.set_score(player.score as f32);
+    }
+
+    physics_time.resume();
+
+    control_player(
+        action.unwrap(),
+        player_movement_q,
+        collision_events,
+        event_gun_shot,
+    );
+
     app_state.pop().unwrap();
 }
 ```
@@ -133,60 +159,30 @@ fn execute_reset_request(
     mut app_state: ResMut<State<AppState>>,
     ai_gym_state: ResMut<Arc<Mutex<AIGymState<PlayerActionFlags>>>>,
 ) {
-    let reset_channel_rx: Receiver<bool>;
-    {
-        let ai_gym_state = ai_gym_state.lock().unwrap();
-        reset_channel_rx = ai_gym_state.__reset_channel_rx.clone();
-    }
-
-    if reset_channel_rx.is_empty() {
+    let ai_gym_state = ai_gym_state.lock().unwrap();
+    if !ai_gym_state.is_reset_request() {
         return;
     }
 
-    reset_channel_rx.recv().unwrap();
-    {
-        let mut ai_gym_state = ai_gym_state.lock().unwrap();
-        ai_gym_state.is_terminated = true;
-    }
-    
-    // # RESET YOUR ENVIRONMENT HERE
+    ai_gym_state.receive_reset_request();
+    app_state.set(AppState::Reset).unwrap();
 }
 ```
 
-#### 6. Switching Environment to Control State
-
-```rust
-fn turnbased_control_system_switch(
-    mut app_state: ResMut<State<AppState>>,
-    time: Res<Time>,
-    mut timer: ResMut<DelayedControlTimer>,
-    ai_gym_state: ResMut<Arc<Mutex<AIGymState<PlayerActionFlags>>>>,
-) {
-    if timer.0.tick(time.delta()).just_finished() {
-        app_state.push(AppState::Control).unwrap();
-
-        let ai_gym_state = ai_gym_state.lock().unwrap();
-
-        if ai_gym_state.__result_channel_rx.is_empty() {
-            ai_gym_state.__result_channel_tx.send(true).unwrap();
-        }
-    }
-}
-```
 
 ### Interacting with Environment
 
-**First Person camera pixels**
+#### First Person camera pixels
 
-GET `http://localhost:7878/screen.png`
+**GET** `http://localhost:7878/screen.png`
 
-**Reset Environment**
+#### Reset Environment
 
-POST `http://localhost:7878/reset`
+**POST** `http://localhost:7878/reset`
 
-**Perform Action**
+#### Perform Action
 
-POST `http://localhost:7878/step` body=ACTION
+**POST** `http://localhost:7878/step` `body=ACTION`
 
 ### Example usage
 

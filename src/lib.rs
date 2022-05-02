@@ -1,3 +1,5 @@
+#![feature(associated_type_bounds)]
+
 // use std::io::Cursor;
 use std::marker::PhantomData;
 use std::num::NonZeroU32;
