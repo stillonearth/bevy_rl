@@ -1,14 +1,13 @@
 # bevy_rl
 
-`bevy_rl` is a tool for building [Reinforcement Learning Gyms](https://gym.openai.com/) 
-with [Bevy](https://bevyengine.org/) game engine in Rust.
-
-It lets you to build 3D AI environments to train your AI agents that learn from raw screen pixels.
+`bevy_rl` lets you build [Reinforcement Learning Gyms](https://gym.openai.com/) environments
+with [Bevy](https://bevyengine.org/) game engine in Rust language to train AI agents that learn from raw screen pixels.
 
 ### Features
 
+* Set of APIs to implement OpenAI Gym interface
 * REST API to control an agent
-* Rendering to membuffer to get FirstPersonCamera pixels and feed to an agent
+* Rendering to RAM membuffer
 
 ### Usage
 
@@ -58,7 +57,7 @@ app
     .add_plugin(AIGymPlugin::<PlayerActionFlags>::default());
 ```
 
-#### 3. Making sure environment is discreet
+#### 3. Make sure environment is controllable at discreet time steps
 
 ```rust
 struct DelayedControlTimer(Timer); 
@@ -98,7 +97,7 @@ fn turnbased_control_system_switch(
 }
 ```
 
-#### 4. Handling Agent Actions
+#### 4. Handle Agent Actions from REST API in Bevy Environment
 
 ```rust
 fn turnbased_text_control_system(
@@ -152,7 +151,7 @@ fn turnbased_text_control_system(
 }
 ```
 
-#### 5. Handling Environment Reset
+#### 5. Handle Environment Reset Requests from REST API in Bevy Environment
 
 ```rust
 fn execute_reset_request(
@@ -172,7 +171,7 @@ fn execute_reset_request(
 
 ### Interacting with Environment
 
-#### First Person camera pixels
+#### Camera Pixels
 
 **GET** `http://localhost:7878/screen.png`
 
@@ -190,7 +189,4 @@ fn execute_reset_request(
 
 ### Limitations
 
-`bevy_rl` is early stage of development and has following limitations:
-
-1. Raw pixels are from GPU buffer and do not contain pixels from 2D camera
-2. You must be careful with sending signals to step and reset requests or application can deadlock
+1. Raw pixels are from GPU buffer 3D camera do not contain pixels from 2D camera
