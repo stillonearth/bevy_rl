@@ -3,7 +3,7 @@ use image;
 use bevy::{prelude::*, render::camera::RenderTarget};
 use crossbeam_channel::*;
 
-#[derive(Clone)]
+// #[derive(Clone)]
 pub struct AIGymState<A: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe> {
     // These parts are made of hack trick internals.
     pub __render_target: Option<RenderTarget>, // render target for camera -- window on in our case texture
@@ -25,9 +25,9 @@ pub struct AIGymState<A: 'static + Send + Sync + Clone + std::panic::RefUnwindSa
 
     // State
     pub screen: Option<image::RgbaImage>,
-    pub rewards: Vec<f32>,
+    pub reward: f32,
     pub action: Option<A>,
-    pub(crate) is_terminated: bool,
+    pub is_terminated: bool,
 }
 
 impl<A: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe> AIGymState<A> {
@@ -48,7 +48,7 @@ impl<A: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe> AIGymState<A>
             __result_reset_channel_tx: result_reset_tx,
             __result_reset_channel_rx: result_reset_rx,
             screen: None,
-            rewards: Vec::new(),
+            reward: 0.0,
             action: None,
             is_terminated: false,
         }
@@ -83,7 +83,7 @@ impl<A: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe> AIGymState<A>
     }
 
     pub fn set_score(&mut self, score: f32) {
-        self.rewards.push(score);
+        self.reward = score;
     }
 
     pub fn set_terminated(&mut self, result: bool) {
@@ -92,7 +92,7 @@ impl<A: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe> AIGymState<A>
 
     pub fn reset(&mut self) {
         self.set_terminated(false);
-        self.rewards = Vec::new();
+        self.reward = 0.0;
         self.__result_reset_channel_tx.send(true).unwrap();
     }
 }

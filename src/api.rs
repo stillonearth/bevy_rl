@@ -88,18 +88,12 @@ fn step<T: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe>(
     step_tx.send(action).unwrap();
     result_rx.recv().unwrap();
 
-    let mut reward = 0.0;
+    let reward;
     let is_terminated;
     {
         let ai_gym_state = state_.inner.lock().unwrap();
 
-        if ai_gym_state.rewards.len() > 0 {
-            reward = ai_gym_state.rewards[ai_gym_state.rewards.len() - 1];
-        }
-        if ai_gym_state.rewards.len() > 1 {
-            reward -= ai_gym_state.rewards[ai_gym_state.rewards.len() - 2];
-        }
-
+        reward = ai_gym_state.reward;
         is_terminated = ai_gym_state.is_terminated.clone();
     }
 
