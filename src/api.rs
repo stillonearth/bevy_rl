@@ -48,11 +48,14 @@ fn screen<T: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe>(
     {
         let state_: &GothamState<T> = GothamState::borrow_from(&state);
         let state__ = state_.inner.lock().unwrap();
-        let image = state__.screen.clone().unwrap();
 
-        image
-            .write_to(&mut Cursor::new(&mut bytes), image::ImageOutputFormat::Png)
-            .unwrap();
+        if !state__.screen.is_none() {
+            let image = state__.screen.clone().unwrap();
+
+            image
+                .write_to(&mut Cursor::new(&mut bytes), image::ImageOutputFormat::Png)
+                .unwrap();
+        }
     }
     let response = create_response::<Vec<u8>>(&state, StatusCode::OK, mime::TEXT_PLAIN, bytes);
 
