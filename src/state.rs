@@ -3,13 +3,19 @@ use image;
 use bevy::{prelude::*, render::camera::RenderTarget};
 use crossbeam_channel::*;
 
-// #[derive(Clone)]
-pub struct AIGymState<A: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe> {
-    // These parts are made of hack trick internals.
-    pub __render_target: Option<RenderTarget>, // render target for camera -- window on in our case texture
-    pub __render_image_handle: Option<Handle<Image>>, // handle to image we use in bevy UI building.
-    // actual texture is GPU ram and we can't access it easily
+pub struct AIBrain<A: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe> {
+    // Bevy internals
+    pub _render_target: Option<RenderTarget>,
+    pub _render_image_handle: Option<Handle<Image>>,
 
+    // State
+    pub screen: Option<image::RgbaImage>,
+    pub reward: f32,
+    pub action: Option<A>,
+    pub is_terminated: bool,
+}
+
+pub struct AIGymState<A: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe> {
     // synchronizing with environment
     pub(crate) __step_channel_tx: Sender<String>,
     pub(crate) __step_channel_rx: Receiver<String>,
@@ -23,19 +29,29 @@ pub struct AIGymState<A: 'static + Send + Sync + Clone + std::panic::RefUnwindSa
     pub(crate) __result_reset_channel_tx: Sender<bool>,
     pub(crate) __result_reset_channel_rx: Receiver<bool>,
 
-    // State
-    pub screen: Option<image::RgbaImage>,
-    pub reward: f32,
-    pub action: Option<A>,
-    pub is_terminated: bool,
+    pub brains: Vec<AIBrain<A>>,
 }
 
 impl<A: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe> AIGymState<A> {
-    pub fn new() -> Self {
+    pub fn new(num_brains: u8) -> Self {
         let (step_tx, step_rx) = bounded(1);
         let (reset_tx, reset_rx) = bounded(1);
         let (result_tx, result_rx) = bounded(1);
         let (result_reset_tx, result_reset_rx) = bounded(1);
+
+        let mut brains: Vec<AIBrain<A>> = Vec::new();
+
+        for _ in 0..num_brains {
+            brains.push(AIBrain {
+                _render_target: None,
+                _render_image_handle: None,
+                screen: None,
+                reward: 0.0,
+                action: None,
+                is_terminated: false,
+            })
+        }
+
         Self {
             __step_channel_tx: step_tx,
             __step_channel_rx: step_rx,
@@ -43,14 +59,9 @@ impl<A: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe> AIGymState<A>
             __result_channel_rx: result_rx,
             __reset_channel_tx: reset_tx,
             __reset_channel_rx: reset_rx,
-            __render_target: None,
-            __render_image_handle: None,
             __result_reset_channel_tx: result_reset_tx,
             __result_reset_channel_rx: result_reset_rx,
-            screen: None,
-            reward: 0.0,
-            action: None,
-            is_terminated: false,
+            brains: brains,
         }
     }
 
@@ -82,17 +93,19 @@ impl<A: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe> AIGymState<A>
         return !self.__reset_channel_tx.is_empty();
     }
 
-    pub fn set_score(&mut self, score: f32) {
-        self.reward = score;
+    pub fn set_score(&mut self, brain: usize, score: f32) {
+        self.brains[brain].reward = score;
     }
 
-    pub fn set_terminated(&mut self, result: bool) {
-        self.is_terminated = result;
+    pub fn set_terminated(&mut self, brain: usize, result: bool) {
+        self.brains[brain].is_terminated = result;
     }
 
     pub fn reset(&mut self) {
-        self.set_terminated(false);
-        self.reward = 0.0;
+        for mut brain in 0..self.brains.len() {
+            self.set_terminated(brain, false);
+            self.set_score(brain, 0.0);
+        }
         self.__result_reset_channel_tx.send(true).unwrap();
     }
 }

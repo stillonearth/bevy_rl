@@ -42,10 +42,7 @@ use wgpu::ImageDataLayout;
 pub struct AIGymSettings {
     pub width: u32,
     pub height: u32,
-}
-
-pub trait EnvironmentInterface {
-    fn reset();
+    pub num_agents: u8,
 }
 
 #[derive(Component, Default)]
@@ -61,11 +58,6 @@ pub struct AIGymPlugin<T: 'static + Send + Sync + Clone + std::panic::RefUnwindS
 
 impl<T: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe> Plugin for AIGymPlugin<T> {
     fn build(&self, app: &mut App) {
-        const FIRST_PASS_DRIVER: &str = "first_pass_driver";
-
-        app.add_plugin(CameraTypePlugin::<AIGymCamera>::default());
-        app.add_startup_system(setup::<T>.label("setup_rendering"));
-
         let ai_gym_state = app
             .world
             .get_resource::<Arc<Mutex<state::AIGymState<T>>>>()
@@ -74,29 +66,54 @@ impl<T: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe> Plugin for AI
 
         let ai_gym_settings = app.world.get_resource::<AIGymSettings>().unwrap().clone();
 
+        app.add_plugin(CameraTypePlugin::<AIGymCamera>::default());
+
+        let first_pass_driver = format!("first_pass_driver");
+
         // Render app
         let render_app = app.sub_app_mut(RenderApp);
         let driver = FirstPassCameraDriver::new(&mut render_app.world);
         // This will add 3D render phases for the new camera.
         render_app.add_system_to_stage(RenderStage::Extract, extract_first_pass_camera_phases);
-        render_app.add_system_to_stage(RenderStage::Render, save_image::<T>);
+
+        for i in 0..ai_gym_settings.num_agents {
+            render_app.add_system_to_stage(
+                RenderStage::Render,
+                move |gpu_images: Res<RenderAssets<Image>>,
+                      render_device: Res<RenderDevice>,
+                      render_queue: Res<RenderQueue>,
+                      ai_gym_state: Res<Arc<Mutex<state::AIGymState<T>>>>,
+                      ai_gym_settings: Res<AIGymSettings>| {
+                    save_image::<T>(
+                        gpu_images,
+                        render_device,
+                        render_queue,
+                        ai_gym_state,
+                        ai_gym_settings,
+                        i as usize,
+                    );
+                },
+            );
+        }
         render_app.insert_resource(ai_gym_state.clone());
         render_app.insert_resource(ai_gym_settings.clone());
 
         let mut graph = render_app.world.resource_mut::<RenderGraph>();
 
         // Add a node for the first pass.
-        graph.add_node(FIRST_PASS_DRIVER, driver);
+        graph.add_node(first_pass_driver.clone(), driver);
 
         // The first pass's dependencies include those of the main pass.
         graph
-            .add_node_edge(node::MAIN_PASS_DEPENDENCIES, FIRST_PASS_DRIVER)
+            .add_node_edge(node::MAIN_PASS_DEPENDENCIES, first_pass_driver.clone())
             .unwrap();
 
         // Insert the first pass node: CLEAR_PASS_DRIVER -> FIRST_PASS_DRIVER -> MAIN_PASS_DRIVER
         graph
-            .add_node_edge(node::CLEAR_PASS_DRIVER, FIRST_PASS_DRIVER)
+            .add_node_edge(node::CLEAR_PASS_DRIVER, first_pass_driver.clone())
             .unwrap();
+
+        app.add_startup_system(setup::<T>.label("setup_rendering"));
     }
 }
 
@@ -177,11 +194,17 @@ fn save_image<T: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe>(
     render_queue: Res<RenderQueue>,
     ai_gym_state: Res<Arc<Mutex<state::AIGymState<T>>>>,
     ai_gym_settings: Res<AIGymSettings>,
+    brain: usize,
 ) {
     let mut ai_gym_state = ai_gym_state.lock().unwrap();
 
     let gpu_image = gpu_images
-        .get(&ai_gym_state.__render_image_handle.clone().unwrap())
+        .get(
+            &ai_gym_state.brains[brain]
+                ._render_image_handle
+                .clone()
+                .unwrap(),
+        )
         .unwrap();
 
     let device = render_device.wgpu_device();
@@ -253,7 +276,7 @@ fn save_image<T: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe>(
         result,
     )
     .unwrap();
-    ai_gym_state.screen = Some(img.clone());
+    ai_gym_state.brains[brain].screen = Some(img.clone());
 }
 
 fn setup<T: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe>(
@@ -270,35 +293,62 @@ fn setup<T: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe>(
         ..default()
     };
 
-    // This is the texture that will be rendered to.
-    let mut image = Image {
-        texture_descriptor: TextureDescriptor {
-            label: Some("render_image"),
-            size,
-            dimension: TextureDimension::D2,
-            format: TextureFormat::Rgba8UnormSrgb, // ::Bgra8UnormSrgb,
-            mip_level_count: 1,
-            sample_count: 1,
-            usage: TextureUsages::TEXTURE_BINDING
-                | TextureUsages::COPY_SRC
-                | TextureUsages::COPY_DST
-                | TextureUsages::RENDER_ATTACHMENT,
-        },
-        ..default()
-    };
-
-    // fill image.data with zeroes
-    image.resize(size);
-
-    let image_handle = images.add(image);
-
     let ai_gym_state_1 = ai_gym_state.into_inner().clone();
     let ai_gym_state_2 = ai_gym_state_1.clone();
 
     let mut ai_gym_state_ = ai_gym_state_1.lock().unwrap();
 
-    ai_gym_state_.__render_target = Some(RenderTarget::Image(image_handle.clone()));
-    ai_gym_state_.__render_image_handle = Some(image_handle.clone());
+    // UI viewport for game
+    commands
+        .spawn_bundle(UiCameraBundle::default())
+        .insert(RenderComponent);
+
+    for i in 0..ai_gym_settings.num_agents {
+        // This is the texture that will be rendered to.
+        let mut image = Image {
+            texture_descriptor: TextureDescriptor {
+                label: None,
+                size,
+                dimension: TextureDimension::D2,
+                format: TextureFormat::Rgba8UnormSrgb,
+                mip_level_count: 1,
+                sample_count: 1,
+                usage: TextureUsages::TEXTURE_BINDING
+                    | TextureUsages::COPY_SRC
+                    | TextureUsages::COPY_DST
+                    | TextureUsages::RENDER_ATTACHMENT,
+            },
+            ..default()
+        };
+
+        // fill image.data with zeroes
+        image.resize(size);
+
+        let image_handle = images.add(image);
+
+        ai_gym_state_.brains[i as usize]._render_target =
+            Some(RenderTarget::Image(image_handle.clone()));
+        ai_gym_state_.brains[i as usize]._render_image_handle = Some(image_handle.clone());
+
+        clear_colors.insert(
+            ai_gym_state_.brains[i as usize]
+                ._render_target
+                .clone()
+                .unwrap(),
+            Color::BLUE,
+        );
+
+        commands
+            .spawn_bundle(ImageBundle {
+                style: Style {
+                    align_self: AlignSelf::Center,
+                    ..Default::default()
+                },
+                image: image_handle.clone().into(),
+                ..Default::default()
+            })
+            .insert(RenderComponent);
+    }
 
     thread::spawn(move || {
         gotham::start(
@@ -309,24 +359,7 @@ fn setup<T: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe>(
         )
     });
 
-    clear_colors.insert(ai_gym_state_.__render_target.clone().unwrap(), Color::WHITE);
-
-    // UI viewport for game
-    commands
-        .spawn_bundle(UiCameraBundle::default())
-        .insert(RenderComponent);
-    commands
-        .spawn_bundle(ImageBundle {
-            style: Style {
-                align_self: AlignSelf::Center,
-                ..Default::default()
-            },
-            image: image_handle.clone().into(),
-            ..Default::default()
-        })
-        .insert(RenderComponent);
-
-    let window = windows.get_primary_mut().unwrap();
-    window.set_resolution(ai_gym_settings.width as f32, ai_gym_settings.height as f32);
-    window.set_resizable(false);
+    // let window = windows.get_primary_mut().unwrap();
+    // window.set_resolution(ai_gym_settings.width as f32, ai_gym_settings.height as f32);
+    // window.set_resizable(false);
 }
