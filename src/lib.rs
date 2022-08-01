@@ -6,53 +6,36 @@ use std::num::NonZeroU32;
 use std::sync::{Arc, Mutex};
 use std::thread;
 
-use futures::executor;
-use image;
-
-mod api;
-pub mod state;
-
+use bevy::core_pipeline::core_3d::graph::node;
+use bevy::core_pipeline::core_3d::{AlphaMask3d, Opaque3d, Transparent3d};
+use bevy::render::render_asset::RenderAssets;
+use bevy::render::render_graph::RenderGraph;
+use bevy::render::renderer::{RenderDevice, RenderQueue};
+use bevy::render::{RenderApp, RenderStage};
 use bevy::{
-    core_pipeline::{
-        draw_3d_graph, node, AlphaMask3d, Opaque3d, RenderTargetClearColors, Transparent3d,
-    },
     prelude::*,
     render::{
-        camera::{ActiveCamera, CameraTypePlugin, RenderTarget},
-        render_graph::{Node, NodeRunError, RenderGraph, RenderGraphContext, SlotValue},
-        render_phase::RenderPhase,
+        camera::RenderTarget,
         render_resource::{
             Extent3d, TextureDescriptor, TextureDimension, TextureFormat, TextureUsages,
         },
-        renderer::RenderContext,
-        RenderApp, RenderStage,
     },
 };
 
-use bevy::render::render_asset::RenderAssets;
-use bevy::render::renderer::RenderDevice;
-use bevy::render::renderer::RenderQueue;
-
 use bytemuck;
+use image;
 
 use wgpu::ImageCopyBuffer;
 use wgpu::ImageDataLayout;
+
+mod api;
+pub mod state;
 
 #[derive(Clone)]
 pub struct AIGymSettings {
     pub width: u32,
     pub height: u32,
 }
-
-pub trait EnvironmentInterface {
-    fn reset();
-}
-
-#[derive(Component, Default)]
-pub struct AIGymCamera;
-
-#[derive(Component)]
-pub struct RenderComponent;
 
 #[derive(Default, Clone)]
 pub struct AIGymPlugin<T: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe>(
@@ -61,11 +44,6 @@ pub struct AIGymPlugin<T: 'static + Send + Sync + Clone + std::panic::RefUnwindS
 
 impl<T: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe> Plugin for AIGymPlugin<T> {
     fn build(&self, app: &mut App) {
-        const FIRST_PASS_DRIVER: &str = "first_pass_driver";
-
-        app.add_plugin(CameraTypePlugin::<AIGymCamera>::default());
-        app.add_startup_system(setup::<T>.label("setup_rendering"));
-
         let ai_gym_state = app
             .world
             .get_resource::<Arc<Mutex<state::AIGymState<T>>>>()
@@ -74,82 +52,17 @@ impl<T: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe> Plugin for AI
 
         let ai_gym_settings = app.world.get_resource::<AIGymSettings>().unwrap().clone();
 
-        // Render app
-        let render_app = app.sub_app_mut(RenderApp);
-        let driver = FirstPassCameraDriver::new(&mut render_app.world);
-        // This will add 3D render phases for the new camera.
-        render_app.add_system_to_stage(RenderStage::Extract, extract_first_pass_camera_phases);
-        render_app.add_system_to_stage(RenderStage::Render, save_image::<T>);
-        render_app.insert_resource(ai_gym_state.clone());
-        render_app.insert_resource(ai_gym_settings.clone());
-
-        let mut graph = render_app.world.resource_mut::<RenderGraph>();
-
-        // Add a node for the first pass.
-        graph.add_node(FIRST_PASS_DRIVER, driver);
-
-        // The first pass's dependencies include those of the main pass.
-        graph
-            .add_node_edge(node::MAIN_PASS_DEPENDENCIES, FIRST_PASS_DRIVER)
-            .unwrap();
-
-        // Insert the first pass node: CLEAR_PASS_DRIVER -> FIRST_PASS_DRIVER -> MAIN_PASS_DRIVER
-        graph
-            .add_node_edge(node::CLEAR_PASS_DRIVER, FIRST_PASS_DRIVER)
-            .unwrap();
+        if let Ok(render_app) = app.get_sub_app_mut(RenderApp) {
+            render_app.add_system_to_stage(RenderStage::Render, save_image::<T>);
+            render_app.insert_resource(ai_gym_state.clone());
+            render_app.insert_resource(ai_gym_settings.clone());
+        }
     }
 }
 
 // ------------------
 // Rendering to Image
 // ------------------
-
-// Add 3D render phases for FIRST_PASS_CAMERA.
-fn extract_first_pass_camera_phases(
-    mut commands: Commands,
-    active: Res<ActiveCamera<AIGymCamera>>,
-) {
-    if let Some(entity) = active.get() {
-        commands
-            .get_or_spawn(entity)
-            .insert_bundle((
-                RenderPhase::<Opaque3d>::default(),
-                RenderPhase::<AlphaMask3d>::default(),
-                RenderPhase::<Transparent3d>::default(),
-            ))
-            .insert(RenderComponent);
-    }
-}
-
-struct FirstPassCameraDriver {
-    query: QueryState<Entity, With<AIGymCamera>>,
-}
-
-impl FirstPassCameraDriver {
-    pub fn new(render_world: &mut World) -> Self {
-        Self {
-            query: QueryState::new(render_world),
-        }
-    }
-}
-
-impl Node for FirstPassCameraDriver {
-    fn update(&mut self, world: &mut World) {
-        self.query.update_archetypes(world);
-    }
-
-    fn run(
-        &self,
-        graph: &mut RenderGraphContext,
-        _render_context: &mut RenderContext,
-        world: &World,
-    ) -> Result<(), NodeRunError> {
-        for camera in self.query.iter_manual(world) {
-            graph.run_sub_graph(draw_3d_graph::NAME, vec![SlotValue::Entity(camera)])?;
-        }
-        Ok(())
-    }
-}
 
 pub fn texture_image_layout(desc: &TextureDescriptor<'_>) -> ImageDataLayout {
     let size = desc.size;
@@ -178,17 +91,18 @@ fn save_image<T: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe>(
     ai_gym_state: Res<Arc<Mutex<state::AIGymState<T>>>>,
     ai_gym_settings: Res<AIGymSettings>,
 ) {
-    let mut ai_gym_state = ai_gym_state.lock().unwrap();
+    let mut ai_gym_state_locked = ai_gym_state.lock().unwrap();
+    let gp: Handle<Image> = ai_gym_state_locked.__render_image_handle.clone().unwrap();
 
-    let gpu_image = gpu_images
-        .get(&ai_gym_state.__render_image_handle.clone().unwrap())
-        .unwrap();
+    let gpu_image = gpu_images.get(&gp).unwrap();
+    let texture_width = gpu_image.size.x as u32;
+    let texture_height = gpu_image.size.y as u32;
 
     let device = render_device.wgpu_device();
 
     let destination = device.create_buffer(&wgpu::BufferDescriptor {
         label: None,
-        size: (gpu_image.size.width * gpu_image.size.height * 4.0) as u64,
+        size: (gpu_image.size.x * gpu_image.size.y * 4.0) as u64,
         usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
         mapped_at_creation: false,
     });
@@ -221,48 +135,40 @@ fn save_image<T: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe>(
             }),
         },
         Extent3d {
-            width: gpu_image.size.width as u32,
-            height: gpu_image.size.height as u32,
+            width: texture_width,
+            height: texture_height,
             ..default()
         },
     );
 
     render_queue.submit([encoder.finish()]);
-
     let buffer_slice = destination.slice(..);
-    let buffer_future = buffer_slice.map_async(wgpu::MapMode::Read);
+
+    buffer_slice.map_async(wgpu::MapMode::Read, move |result| {
+        let err = result.err();
+        if err.is_some() {
+            panic!("{}", err.unwrap().to_string());
+        }
+    });
+
     device.poll(wgpu::Maintain::Wait);
-
-    let result = executor::block_on(buffer_future);
-
-    let err = result.err();
-    if err.is_some() {
-        panic!("{}", err.unwrap().to_string());
-    }
 
     let data = buffer_slice.get_mapped_range();
     let result: Vec<u8> = bytemuck::cast_slice(&data).to_vec();
 
-    // free memory
     drop(data);
-    destination.unmap();
+    let img: image::RgbaImage =
+        image::ImageBuffer::from_raw(texture_width, texture_height as u32, result).unwrap();
 
-    let img: image::RgbaImage = image::ImageBuffer::from_raw(
-        gpu_image.size.width as u32,
-        gpu_image.size.height as u32,
-        result,
-    )
-    .unwrap();
-    ai_gym_state.screen = Some(img.clone());
+    ai_gym_state_locked.screen = Some(img.clone());
+
+    destination.unmap();
 }
 
 fn setup<T: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe>(
-    mut commands: Commands,
     mut images: ResMut<Assets<Image>>,
     ai_gym_state: ResMut<Arc<Mutex<state::AIGymState<T>>>>,
     ai_gym_settings: Res<AIGymSettings>,
-    mut clear_colors: ResMut<RenderTargetClearColors>,
-    mut windows: ResMut<Windows>,
 ) {
     let size = Extent3d {
         width: ai_gym_settings.width,
@@ -308,25 +214,4 @@ fn setup<T: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe>(
             }),
         )
     });
-
-    clear_colors.insert(ai_gym_state_.__render_target.clone().unwrap(), Color::WHITE);
-
-    // UI viewport for game
-    commands
-        .spawn_bundle(UiCameraBundle::default())
-        .insert(RenderComponent);
-    commands
-        .spawn_bundle(ImageBundle {
-            style: Style {
-                align_self: AlignSelf::Center,
-                ..Default::default()
-            },
-            image: image_handle.clone().into(),
-            ..Default::default()
-        })
-        .insert(RenderComponent);
-
-    let window = windows.get_primary_mut().unwrap();
-    window.set_resolution(ai_gym_settings.width as f32, ai_gym_settings.height as f32);
-    window.set_resizable(false);
 }

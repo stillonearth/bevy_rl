@@ -8,14 +8,14 @@ keywords = ["gamedev", "bevy", "gym", "rl"]
 repository = "https://github.com/stillonearth/bevy_rl"
 
 [dependencies]
-bevy = { version = "0.7.0" }
+bevy = { version = "0.8.0" }
 bytemuck = "1.8.0"
 futures = "0.3"
 gotham = "0.7.1"
 hyper = "0.14.17"
 image = "0.24.1"
 mime = "0.3.16"
-wgpu = "0.12.0"
+wgpu = "0.13.1"
 crossbeam = "0.8"
 crossbeam-channel = "0.5"
 
