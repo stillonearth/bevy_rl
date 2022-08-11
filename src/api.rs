@@ -14,7 +14,7 @@ use image;
 use std::io::Cursor;
 use std::sync::{Arc, Mutex};
 
-use crate::state;
+use crate::{state, AIGymSettings};
 
 // ---------------
 // AI Gym REST API
@@ -23,6 +23,7 @@ use crate::state;
 #[derive(Clone, StateData)]
 pub(crate) struct GothamState<T: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe> {
     pub(crate) inner: Arc<Mutex<state::AIGymState<T>>>,
+    pub(crate) settings: AIGymSettings,
 }
 
 pub(crate) fn router<T: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe>(
@@ -49,13 +50,28 @@ fn screen<T: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe>(
         let state_: &GothamState<T> = GothamState::borrow_from(&state);
         let state__ = state_.inner.lock().unwrap();
 
-        if !state__.screen.is_none() {
-            let image = state__.screen.clone().unwrap();
+        let mut all_agents_image = image::RgbaImage::new(
+            state_.settings.width * state_.settings.num_agents,
+            state_.settings.height,
+        );
 
-            image
-                .write_to(&mut Cursor::new(&mut bytes), image::ImageOutputFormat::Png)
-                .unwrap();
+        let mut agent_index = 0;
+        for screen in state__.screen.iter() {
+            let image = screen.clone();
+
+            image::imageops::overlay(
+                &mut all_agents_image,
+                &image,
+                (agent_index * state_.settings.width) as i64,
+                0,
+            );
+
+            agent_index += 1;
         }
+
+        all_agents_image
+            .write_to(&mut Cursor::new(&mut bytes), image::ImageOutputFormat::Png)
+            .unwrap();
     }
     let response = create_response::<Vec<u8>>(&state, StatusCode::OK, mime::TEXT_PLAIN, bytes);
 

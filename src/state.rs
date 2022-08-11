@@ -6,9 +6,7 @@ use crossbeam_channel::*;
 // #[derive(Clone)]
 pub struct AIGymState<A: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe> {
     // These parts are made of hack trick internals.
-    pub __render_target: Option<RenderTarget>, // render target for camera -- window on in our case texture
-    pub __render_image_handle: Option<Handle<Image>>, // handle to image we use in bevy UI building.
-    // actual texture is GPU ram and we can't access it easily
+    pub render_image_handles: Vec<Handle<Image>>,
 
     // synchronizing with environment
     pub(crate) __step_channel_tx: Sender<String>,
@@ -24,7 +22,7 @@ pub struct AIGymState<A: 'static + Send + Sync + Clone + std::panic::RefUnwindSa
     pub(crate) __result_reset_channel_rx: Receiver<bool>,
 
     // State
-    pub screen: Option<image::RgbaImage>,
+    pub screen: Vec<image::RgbaImage>,
     pub reward: f32,
     pub action: Option<A>,
     pub is_terminated: bool,
@@ -37,17 +35,21 @@ impl<A: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe> AIGymState<A>
         let (result_tx, result_rx) = bounded(1);
         let (result_reset_tx, result_reset_rx) = bounded(1);
         Self {
+            // Channels
             __step_channel_tx: step_tx,
             __step_channel_rx: step_rx,
             __result_channel_tx: result_tx,
             __result_channel_rx: result_rx,
             __reset_channel_tx: reset_tx,
             __reset_channel_rx: reset_rx,
-            __render_target: None,
-            __render_image_handle: None,
             __result_reset_channel_tx: result_reset_tx,
             __result_reset_channel_rx: result_reset_rx,
-            screen: None,
+
+            // Render Targets
+            render_image_handles: Vec::new(),
+
+            // State
+            screen: Vec::new(),
             reward: 0.0,
             action: None,
             is_terminated: false,
