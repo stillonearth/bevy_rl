@@ -9,7 +9,6 @@ use std::thread;
 use bevy::{
     prelude::*,
     render::{
-        camera::RenderTarget,
         render_asset::RenderAssets,
         render_resource::{
             Extent3d, TextureDescriptor, TextureDimension, TextureFormat, TextureUsages,
@@ -106,7 +105,7 @@ fn save_image<T: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe>(
         ..default()
     };
 
-    ai_gym_state_locked.screen = Vec::new();
+    ai_gym_state_locked.screens = Vec::new();
     for gp in ai_gym_state_locked.render_image_handles.clone() {
         let gpu_image = gpu_images.get(&gp).unwrap();
         let texture_width = size.width as u32;
@@ -163,12 +162,29 @@ fn save_image<T: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe>(
         let result: Vec<u8> = bytemuck::cast_slice(&data).to_vec();
 
         drop(data);
-        let rgba_image: image::RgbaImage =
+        let mut rgba_image: image::RgbaImage =
             image::ImageBuffer::from_raw(texture_width, texture_height as u32, result.clone())
                 .unwrap();
 
-        ai_gym_state_locked.screen.push(rgba_image.clone());
+        // fixing bgra to rgba
+        convert_bgra_to_rgba(&mut rgba_image);
+
+        ai_gym_state_locked.screens.push(rgba_image.clone());
         destination.unmap();
+    }
+}
+
+// convert BRGA image to RGBA image
+fn convert_bgra_to_rgba(image: &mut image::RgbaImage) {
+    for pixel in image.pixels_mut() {
+        let b = pixel[0];
+        let g = pixel[1];
+        let r = pixel[2];
+        let a = pixel[3];
+        pixel[0] = r;
+        pixel[1] = g;
+        pixel[2] = b;
+        pixel[3] = a;
     }
 }
 

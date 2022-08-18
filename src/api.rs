@@ -11,14 +11,23 @@ use hyper::{body, Body, Response, StatusCode};
 
 use futures::executor;
 use image;
+use serde::{Deserialize, Serialize};
+use serde_json::json;
 use std::io::Cursor;
 use std::sync::{Arc, Mutex};
 
 use crate::{state, AIGymSettings};
 
-// ---------------
-// AI Gym REST API
-// ---------------
+#[derive(Serialize, Deserialize)]
+pub(crate) struct AgentState {
+    reward: f32,
+    is_terminated: bool,
+}
+
+#[derive(Serialize, Deserialize)]
+pub(crate) struct AgentAction {
+    action: Option<String>,
+}
 
 #[derive(Clone, StateData)]
 pub(crate) struct GothamState<T: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe> {
@@ -56,7 +65,7 @@ fn screen<T: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe>(
         );
 
         let mut agent_index = 0;
-        for screen in state__.screen.iter() {
+        for screen in state__.screens.iter() {
             let image = screen.clone();
 
             image::imageops::overlay(
@@ -84,45 +93,46 @@ fn step<T: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe>(
     let body_ = Body::take_from(&mut state);
     let valid_body = executor::block_on(body::to_bytes(body_)).unwrap();
     let action = String::from_utf8(valid_body.to_vec()).unwrap();
+    let err = serde_json::from_str::<Vec<AgentAction>>(&action).err();
+    if err.is_some() {
+        return (state, err.unwrap().to_string());
+    }
+    let agent_actions: Vec<AgentAction> = serde_json::from_str(&action).unwrap();
 
     let state_: &GothamState<T> = GothamState::borrow_from(&state);
-    let step_tx: Sender<String>;
-    let result_rx: Receiver<bool>;
+    let step_tx: Sender<Vec<Option<String>>>;
+    let result_rx: Receiver<Vec<bool>>;
 
-    let is_terminated: bool;
+    if agent_actions.len() != state_.settings.num_agents as usize {
+        return (state, "Invalid number of actions".to_string());
+    }
+
     {
         let ai_gym_state = state_.inner.lock().unwrap();
-        is_terminated = ai_gym_state.is_terminated;
-        step_tx = ai_gym_state.__step_channel_tx.clone();
-        result_rx = ai_gym_state.__result_channel_rx.clone();
+        step_tx = ai_gym_state._step_channel_tx.clone();
+        result_rx = ai_gym_state._step_result_channel_rx.clone();
     }
 
-    if is_terminated {
-        return (
-            state,
-            format!("{{\"reward\": {}, \"is_terminated\": {}}}", 0, true),
-        );
-    }
+    let actions = agent_actions
+        .iter()
+        .map(|agent_action| agent_action.action.clone())
+        .collect();
 
-    step_tx.send(action).unwrap();
+    step_tx.send(actions).unwrap();
     result_rx.recv().unwrap();
 
-    let reward;
-    let is_terminated;
+    let mut agent_states: Vec<AgentState> = Vec::new();
     {
         let ai_gym_state = state_.inner.lock().unwrap();
-
-        reward = ai_gym_state.reward;
-        is_terminated = ai_gym_state.is_terminated.clone();
+        for i in 0..ai_gym_state.rewards.len() {
+            agent_states.push(AgentState {
+                reward: ai_gym_state.rewards[i],
+                is_terminated: ai_gym_state.terminations[i],
+            });
+        }
     }
 
-    return (
-        state,
-        format!(
-            "{{\"reward\": {}, \"is_terminated\": {}}}",
-            reward, is_terminated
-        ),
-    );
+    return (state, json!(agent_states).to_string());
 }
 
 fn reset<T: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe>(
@@ -133,8 +143,8 @@ fn reset<T: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe>(
     {
         let state_: &GothamState<T> = GothamState::borrow_from(&state);
         let ai_gym_state = state_.inner.lock().unwrap();
-        reset_channel_tx = ai_gym_state.__reset_channel_tx.clone();
-        reset_result_channel_rx = ai_gym_state.__result_reset_channel_rx.clone();
+        reset_channel_tx = ai_gym_state._reset_channel_tx.clone();
+        reset_result_channel_rx = ai_gym_state._result_reset_channel_rx.clone();
     }
 
     reset_channel_tx.send(true).unwrap();

@@ -1,23 +1,26 @@
 [package]
 edition = "2021"
 name = "bevy_rl"
-version = "0.0.5"
+version = "0.0.6"
 license = "MIT OR Apache-2.0"
-description = "Using bevy to build gym environments to train reinforcement learning agents"
-keywords = ["gamedev", "bevy", "gym", "rl"]
+description = "Build environments for reinforcement learning with bevy"
+keywords = ["ai", "bevy", "gym", "rl"]
 repository = "https://github.com/stillonearth/bevy_rl"
 
 [dependencies]
 bevy = { version = "0.8.0" }
-bytemuck = "1.8.0"
-futures = "0.3"
+bytemuck = "1.12.1"
+crossbeam = "0.8.2"
+crossbeam-channel = "0.5.6"
+futures = "0.3.23"
 gotham = "0.7.1"
-hyper = "0.14.17"
-image = "0.24.1"
+hyper = "0.14.20"
+image = "0.24.3"
 mime = "0.3.16"
+serde = "1.0.89"
+serde_derive = "1.0.143"
+serde_json = "1.0.83"
 wgpu = "0.13.1"
-crossbeam = "0.8"
-crossbeam-channel = "0.5"
 
 [profile.dev]
 opt-level = 3
