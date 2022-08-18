@@ -21,8 +21,8 @@ use bevy::{
 use bytemuck;
 use image;
 
-use wgpu::ImageCopyBuffer;
-use wgpu::ImageDataLayout;
+use wgpu::{BufferUsages, BufferView, ImageCopyBuffer};
+use wgpu::{ImageCopyTexture, ImageDataLayout};
 
 mod api;
 pub mod state;
@@ -59,7 +59,7 @@ impl<T: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe> Plugin for AI
         let ai_gym_settings = app.world.get_resource::<AIGymSettings>().unwrap().clone();
 
         if let Ok(render_app) = app.get_sub_app_mut(RenderApp) {
-            render_app.add_system_to_stage(RenderStage::Render, save_image::<T>);
+            render_app.add_system_to_stage(RenderStage::Render, copy_from_gpu_to_ram::<T>);
             render_app.insert_resource(ai_gym_state.clone());
             render_app.insert_resource(ai_gym_settings.clone());
         }
@@ -90,7 +90,7 @@ pub fn texture_image_layout(desc: &TextureDescriptor<'_>) -> ImageDataLayout {
     return layout;
 }
 
-fn save_image<T: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe>(
+fn copy_from_gpu_to_ram<T: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe>(
     gpu_images: Res<RenderAssets<Image>>,
     render_device: Res<RenderDevice>,
     render_queue: Res<RenderQueue>,
@@ -106,8 +106,16 @@ fn save_image<T: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe>(
     };
 
     ai_gym_state_locked.screens = Vec::new();
-    for gp in ai_gym_state_locked.render_image_handles.clone() {
-        let gpu_image = gpu_images.get(&gp).unwrap();
+    for (i, gp) in ai_gym_state_locked
+        .render_image_handles
+        .clone()
+        .iter()
+        .enumerate()
+    {
+        let render_gpu_image = gpu_images.get(&gp).unwrap();
+        let display_gpu_image = gpu_images
+            .get(&ai_gym_state_locked.display_image_handles[i])
+            .unwrap();
         let texture_width = size.width as u32;
         let texture_height = size.height as u32;
 
@@ -118,10 +126,16 @@ fn save_image<T: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe>(
             mapped_at_creation: false,
         });
 
-        let texture = gpu_image.texture.clone();
+        let texture = render_gpu_image.texture.clone();
 
         let mut encoder =
             render_device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+
+        let texture_extent = Extent3d {
+            width: texture_width,
+            height: texture_height,
+            ..default()
+        };
 
         encoder.copy_texture_to_buffer(
             texture.as_image_copy(),
@@ -134,16 +148,10 @@ fn save_image<T: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe>(
                     format: TextureFormat::Bgra8UnormSrgb,
                     mip_level_count: 1,
                     sample_count: 1,
-                    usage: TextureUsages::TEXTURE_BINDING
-                        | TextureUsages::COPY_DST
-                        | TextureUsages::RENDER_ATTACHMENT,
+                    usage: TextureUsages::TEXTURE_BINDING | TextureUsages::COPY_DST,
                 }),
             },
-            Extent3d {
-                width: texture_width,
-                height: texture_height,
-                ..default()
-            },
+            texture_extent,
         );
 
         render_queue.submit([encoder.finish()]);
@@ -170,7 +178,50 @@ fn save_image<T: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe>(
         convert_bgra_to_rgba(&mut rgba_image);
 
         ai_gym_state_locked.screens.push(rgba_image.clone());
+
+        // copy image back to GPU
+        let buf = rgba_image.into_vec();
+
+        let temp_buf = device.create_buffer(&wgpu::BufferDescriptor {
+            label: None,
+            size: buf.len() as u64,
+            usage: BufferUsages::COPY_DST | BufferUsages::COPY_SRC,
+            mapped_at_creation: false,
+        });
+
+        render_queue.write_buffer(&temp_buf, 0, &buf);
+        render_queue.submit([]);
+        // device.poll(wgpu::Maintain::Wait);
+
+        let mut encoder =
+            render_device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+
+        encoder.copy_buffer_to_texture(
+            ImageCopyBuffer {
+                buffer: &temp_buf,
+                layout: texture_image_layout(&TextureDescriptor {
+                    label: None,
+                    size: size,
+                    dimension: TextureDimension::D2,
+                    format: TextureFormat::Rgba8Unorm,
+                    mip_level_count: 1,
+                    sample_count: 1,
+                    usage: TextureUsages::COPY_SRC,
+                }),
+            },
+            ImageCopyTexture {
+                texture: &display_gpu_image.texture,
+                mip_level: 0,
+                origin: wgpu::Origin3d { x: 0, y: 0, z: 0 },
+                aspect: wgpu::TextureAspect::All,
+            },
+            texture_extent,
+        );
+
+        render_queue.submit([encoder.finish()]);
+        // device.poll(wgpu::Maintain::Wait);
         destination.unmap();
+        temp_buf.destroy();
     }
 }
 
@@ -189,6 +240,7 @@ fn convert_bgra_to_rgba(image: &mut image::RgbaImage) {
 }
 
 fn setup<T: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe>(
+    mut commands: Commands,
     mut images: ResMut<Assets<Image>>,
     ai_gym_state: ResMut<Arc<Mutex<state::AIGymState<T>>>>,
     ai_gym_settings: Res<AIGymSettings>,
@@ -207,7 +259,7 @@ fn setup<T: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe>(
 
     for _ in 0..ai_gym_settings.num_agents {
         // This is the texture that will be rendered to.
-        let mut image = Image {
+        let mut render_image = Image {
             texture_descriptor: TextureDescriptor {
                 label: None,
                 size,
@@ -215,17 +267,38 @@ fn setup<T: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe>(
                 format: TextureFormat::Bgra8UnormSrgb,
                 mip_level_count: 1,
                 sample_count: 1,
-                usage: TextureUsages::TEXTURE_BINDING
-                    | TextureUsages::COPY_SRC
+                usage: TextureUsages::COPY_SRC
                     | TextureUsages::COPY_DST
+                    | TextureUsages::TEXTURE_BINDING
                     | TextureUsages::RENDER_ATTACHMENT,
             },
             ..default()
         };
+        render_image.resize(size);
+        ai_gym_state
+            .render_image_handles
+            .push(images.add(render_image));
 
-        // fill image.data with zeroes
-        image.resize(size);
-        ai_gym_state.render_image_handles.push(images.add(image));
+        let mut display_image = Image {
+            texture_descriptor: TextureDescriptor {
+                label: None,
+                size,
+                dimension: TextureDimension::D2,
+                format: TextureFormat::Rgba8UnormSrgb,
+                mip_level_count: 1,
+                sample_count: 1,
+                usage: TextureUsages::COPY_SRC
+                    | TextureUsages::COPY_DST
+                    | TextureUsages::TEXTURE_BINDING
+                    | TextureUsages::RENDER_ATTACHMENT,
+            },
+            ..default()
+        };
+        display_image.resize(size);
+
+        ai_gym_state
+            .display_image_handles
+            .push(images.add(display_image));
     }
 
     let ai_gym_settings = ai_gym_settings.clone();
@@ -237,6 +310,15 @@ fn setup<T: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe>(
                 settings: ai_gym_settings,
             }),
         )
+    });
+
+    commands.spawn_bundle(ImageBundle {
+        style: Style {
+            align_self: AlignSelf::Center,
+            ..Default::default()
+        },
+        image: ai_gym_state.display_image_handles[1].clone().into(),
+        ..default()
     });
 
     let window = windows.get_primary_mut().unwrap();

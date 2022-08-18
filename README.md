@@ -1,15 +1,22 @@
-<img width="209" alt="image" src="https://user-images.githubusercontent.com/97428129/168558015-e6ddd435-dfdf-4f03-b352-070074f5a392.png">
-
 # bevy_rl
 
-`bevy_rl` lets you build [Reinforcement Learning Gyms](https://gym.openai.com/) environments
-with [Bevy](https://bevyengine.org/) game engine in Rust language to train AI agents that learn from raw screen pixels.
+<img width="209" alt="image" src="https://user-images.githubusercontent.com/97428129/168558015-e6ddd435-dfdf-4f03-b352-070074f5a392.png">
+
+Build [Reinforcement Learning Gym](https://gym.openai.com/) environments
+with [Bevy](https://bevyengine.org/) engine to train AI agents that learn from raw screen pixels.
+
+### Compatibility
+
+| bevy version | bevy_rl version |
+| ------------ | :-------------: |
+| 0.7          |      0.0.5      |
+| 0.8          |       0.8       |
 
 ### Features
 
-* Set of APIs to implement OpenAI Gym interface
-* REST API to control an agent
-* Rendering to RAM membuffer
+- Set of APIs to implement OpenAI Gym interface
+- REST API to control an agent
+- Rendering to RAM membuffer
 
 ### Usage
 
@@ -43,26 +50,22 @@ bitflags! {
 #### 2. Enable AI Gym Plugin
 
 ```rust
-app
-    // Plugin settings
-    .insert_resource(AIGymSettings { \\ viewport settings
-        width: 768,  
-        height: 768,
-    })
-    
-    // Actions
-    .insert_resource(Arc::new(Mutex::new(AIGymState::<PlayerActionFlags> { 
-        ..Default::default()
-    })))
+    let gym_settings = AIGymSettings {
+        width: 256,
+        height: 256,
+        num_agents: 2,
+    };
 
-    // Plugin
-    .add_plugin(AIGymPlugin::<PlayerActionFlags>::default());
+    app
+        // bevy_rl initialization
+        .insert_resource(gym_settings.clone())
+        .insert_resource(Arc::new(Mutex::new(AIGymState::<PlayerActionFlags>::new(
 ```
 
 #### 3. Make sure environment is controllable at discreet time steps
 
 ```rust
-struct DelayedControlTimer(Timer); 
+struct DelayedControlTimer(Timer);
 ```
 
 ```rust
@@ -99,64 +102,10 @@ fn turnbased_control_system_switch(
 }
 ```
 
-#### 4. Handle Agent Actions from REST API in Bevy Environment
+#### 4. Handle Reset & Agent Actions from REST API in Bevy Environment
 
 ```rust
-fn turnbased_text_control_system(
-    ai_gym_state: ResMut<Arc<Mutex<AIGymState<PlayerActionFlags>>>>,
-    mut app_state: ResMut<State<AppState>>,
-) {
-    let mut ai_gym_state = ai_gym_state.lock().unwrap();
-
-    if !ai_gym_state.is_next_action() {
-        return;
-    }
-
-    let unparsed_action = ai_gym_state.receive_action_string();
-
-    if unparsed_action == "" {
-        ai_gym_state.send_step_result(false);
-        return;
-    }
-
-    let action = match unparsed_action.as_str() {
-        "FORWARD" => Some(PlayerActionFlags::FORWARD),
-        "BACKWARD" => Some(PlayerActionFlags::BACKWARD),
-        "LEFT" => Some(PlayerActionFlags::LEFT),
-        "RIGHT" => Some(PlayerActionFlags::RIGHT),
-        "TURN_LEFT" => Some(PlayerActionFlags::TURN_LEFT),
-        "TURN_RIGHT" => Some(PlayerActionFlags::TURN_RIGHT),
-        "SHOOT" => Some(PlayerActionFlags::SHOOT),
-        _ => None,
-    };
-
-    if action.is_none() {
-        ai_gym_state.send_step_result(false);
-        return;
-    }
-
-    let player = player_query.iter().find(|e| e.name == "Player 1").unwrap();
-    {
-        ai_gym_state.set_score(player.score as f32);
-    }
-
-    physics_time.resume();
-
-    control_player(
-        action.unwrap(),
-        player_movement_q,
-        collision_events,
-        event_gun_shot,
-    );
-
-    app_state.pop().unwrap();
-}
-```
-
-#### 5. Handle Environment Reset Requests from REST API in Bevy Environment
-
-```rust
-fn execute_reset_request(
+pub(crate) fn execute_reset_request(
     mut app_state: ResMut<State<AppState>>,
     ai_gym_state: ResMut<Arc<Mutex<AIGymState<PlayerActionFlags>>>>,
 ) {
@@ -168,27 +117,78 @@ fn execute_reset_request(
     ai_gym_state.receive_reset_request();
     app_state.set(AppState::Reset).unwrap();
 }
+
+pub(crate) fn turnbased_control_system_switch(
+    mut app_state: ResMut<State<AppState>>,
+    time: Res<Time>,
+    mut timer: ResMut<DelayedControlTimer>,
+    ai_gym_state: ResMut<Arc<Mutex<AIGymState<PlayerActionFlags>>>>,
+    ai_gym_settings: Res<AIGymSettings>,
+    mut physics_time: ResMut<PhysicsTime>,
+) {
+    if timer.0.tick(time.delta()).just_finished() {
+        app_state.overwrite_push(AppState::Control).unwrap();
+        physics_time.pause();
+
+        let ai_gym_state = ai_gym_state.lock().unwrap();
+        let results = (0..ai_gym_settings.num_agents).map(|_| true).collect();
+        ai_gym_state.send_step_result(results);
+    }
+}
+
+pub(crate) fn turnbased_text_control_system(
+    agent_movement_q: Query<(&mut heron::prelude::Velocity, &mut Transform, &Actor)>,
+    collision_events: EventReader<CollisionEvent>,
+    event_gun_shot: EventWriter<EventGunShot>,
+    ai_gym_state: ResMut<Arc<Mutex<AIGymState<PlayerActionFlags>>>>,
+    ai_gym_settings: Res<AIGymSettings>,
+    mut app_state: ResMut<State<AppState>>,
+    mut physics_time: ResMut<PhysicsTime>,
+) {
+    let mut ai_gym_state = ai_gym_state.lock().unwrap();
+
+    if !ai_gym_state.is_next_action() {
+        return;
+    }
+
+    let unparsed_actions = ai_gym_state.receive_action_strings();
+    let mut actions: Vec<Option<PlayerActionFlags>> =
+        (0..ai_gym_settings.num_agents).map(|_| None).collect();
+
+    for i in 0..unparsed_actions.len() {
+        let unparsed_action = unparsed_actions[i].clone();
+        ai_gym_state.set_reward(i, 0.0);
+
+        if unparsed_action.is_none() {
+            actions[i] = None;
+            continue;
+        }
+
+        let action = match unparsed_action.unwrap().as_str() {
+            "FORWARD" => Some(PlayerActionFlags::FORWARD),
+            "BACKWARD" => Some(PlayerActionFlags::BACKWARD),
+            "LEFT" => Some(PlayerActionFlags::LEFT),
+            "RIGHT" => Some(PlayerActionFlags::RIGHT),
+            "TURN_LEFT" => Some(PlayerActionFlags::TURN_LEFT),
+            "TURN_RIGHT" => Some(PlayerActionFlags::TURN_RIGHT),
+            "SHOOT" => Some(PlayerActionFlags::SHOOT),
+            _ => None,
+        };
+
+        actions[i] = action;
+    }
+
+    physics_time.resume();
+    control_agents(actions, agent_movement_q, collision_events, event_gun_shot);
+
+    app_state.pop().unwrap();
+}
 ```
 
+### REST API
 
-### Interacting with Environment
-
-#### Camera Pixels
-
-**GET** `http://localhost:7878/screen.png`
-
-#### Reset Environment
-
-**POST** `http://localhost:7878/reset`
-
-#### Perform Action
-
-**POST** `http://localhost:7878/step` `body=ACTION`
-
-### Example usage
-
-[BevyStein](https://github.com/stillonearth/BevyStein) is first-person shooter environment made with `bevy_rl`.
-
-### Limitations
-
-1. Raw pixels are from GPU buffer 3D camera do not contain pixels from 2D camera
+| Method            | Verb     | bevy_rl version                            |
+| ----------------- | -------- | ------------------------------------------ |
+| Camera Pixels     | **GET**  | `http://localhost:7878/screen.png`         |
+| Reset Environment | **POST** | `http://localhost:7878/reset`              |
+| Step              | **POST** | `http://localhost:7878/step` `body=ACTION` |
