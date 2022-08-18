@@ -7,7 +7,6 @@ use crate::AIGymSettings;
 pub struct AIGymState<A: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe> {
     // Bevy image handle for the screen
     pub render_image_handles: Vec<Handle<Image>>,
-    pub display_image_handles: Vec<Handle<Image>>,
 
     // Sync with engine thread.
     pub(crate) _step_channel_tx: Sender<Vec<Option<String>>>,
@@ -48,7 +47,6 @@ impl<A: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe> AIGymState<A>
 
             // Render Targets
             render_image_handles: Vec::new(),
-            display_image_handles: Vec::new(),
 
             // State
             screens: Vec::new(),

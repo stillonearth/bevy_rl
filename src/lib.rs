@@ -6,6 +6,7 @@ use std::num::NonZeroU32;
 use std::sync::{Arc, Mutex};
 use std::thread;
 
+use bevy::render::view::RenderLayers;
 use bevy::{
     prelude::*,
     render::{
@@ -21,8 +22,8 @@ use bevy::{
 use bytemuck;
 use image;
 
-use wgpu::{BufferUsages, BufferView, ImageCopyBuffer};
-use wgpu::{ImageCopyTexture, ImageDataLayout};
+use wgpu::ImageCopyBuffer;
+use wgpu::ImageDataLayout;
 
 mod api;
 pub mod state;
@@ -113,9 +114,6 @@ fn copy_from_gpu_to_ram<T: 'static + Send + Sync + Clone + std::panic::RefUnwind
         .enumerate()
     {
         let render_gpu_image = gpu_images.get(&gp).unwrap();
-        let display_gpu_image = gpu_images
-            .get(&ai_gym_state_locked.display_image_handles[i])
-            .unwrap();
         let texture_width = size.width as u32;
         let texture_height = size.height as u32;
 
@@ -179,49 +177,7 @@ fn copy_from_gpu_to_ram<T: 'static + Send + Sync + Clone + std::panic::RefUnwind
 
         ai_gym_state_locked.screens.push(rgba_image.clone());
 
-        // copy image back to GPU
-        let buf = rgba_image.into_vec();
-
-        let temp_buf = device.create_buffer(&wgpu::BufferDescriptor {
-            label: None,
-            size: buf.len() as u64,
-            usage: BufferUsages::COPY_DST | BufferUsages::COPY_SRC,
-            mapped_at_creation: false,
-        });
-
-        render_queue.write_buffer(&temp_buf, 0, &buf);
-        render_queue.submit([]);
-        // device.poll(wgpu::Maintain::Wait);
-
-        let mut encoder =
-            render_device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
-
-        encoder.copy_buffer_to_texture(
-            ImageCopyBuffer {
-                buffer: &temp_buf,
-                layout: texture_image_layout(&TextureDescriptor {
-                    label: None,
-                    size: size,
-                    dimension: TextureDimension::D2,
-                    format: TextureFormat::Rgba8Unorm,
-                    mip_level_count: 1,
-                    sample_count: 1,
-                    usage: TextureUsages::COPY_SRC,
-                }),
-            },
-            ImageCopyTexture {
-                texture: &display_gpu_image.texture,
-                mip_level: 0,
-                origin: wgpu::Origin3d { x: 0, y: 0, z: 0 },
-                aspect: wgpu::TextureAspect::All,
-            },
-            texture_extent,
-        );
-
-        render_queue.submit([encoder.finish()]);
-        // device.poll(wgpu::Maintain::Wait);
         destination.unmap();
-        temp_buf.destroy();
     }
 }
 
@@ -245,6 +201,7 @@ fn setup<T: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe>(
     ai_gym_state: ResMut<Arc<Mutex<state::AIGymState<T>>>>,
     ai_gym_settings: Res<AIGymSettings>,
     mut windows: ResMut<Windows>,
+    asset_server: Res<AssetServer>,
 ) {
     let size = Extent3d {
         width: ai_gym_settings.width,
@@ -295,10 +252,6 @@ fn setup<T: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe>(
             ..default()
         };
         display_image.resize(size);
-
-        ai_gym_state
-            .display_image_handles
-            .push(images.add(display_image));
     }
 
     let ai_gym_settings = ai_gym_settings.clone();
@@ -312,14 +265,18 @@ fn setup<T: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe>(
         )
     });
 
-    commands.spawn_bundle(ImageBundle {
-        style: Style {
-            align_self: AlignSelf::Center,
-            ..Default::default()
-        },
-        image: ai_gym_state.display_image_handles[1].clone().into(),
-        ..default()
-    });
+    let second_pass_layer = RenderLayers::layer(1);
+
+    commands
+        .spawn_bundle(Camera2dBundle::default())
+        .insert(second_pass_layer);
+    commands
+        .spawn_bundle(SpriteBundle {
+            texture: ai_gym_state.render_image_handles[0].clone().into(),
+            // image: asset_server.load("walls.png").into(),
+            ..default()
+        })
+        .insert(second_pass_layer);
 
     let window = windows.get_primary_mut().unwrap();
     window.set_resolution(size.width as f32, size.height as f32);
