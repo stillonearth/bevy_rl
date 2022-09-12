@@ -109,8 +109,8 @@ fn step<T: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe>(
 
     {
         let ai_gym_state = state_.inner.lock().unwrap();
-        step_tx = ai_gym_state._step_channel_tx.clone();
-        result_rx = ai_gym_state._step_result_channel_rx.clone();
+        step_tx = ai_gym_state._step_tx.clone();
+        result_rx = ai_gym_state._step_result_rx.clone();
     }
 
     let actions = agent_actions
@@ -143,8 +143,8 @@ fn reset<T: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe>(
     {
         let state_: &GothamState<T> = GothamState::borrow_from(&state);
         let ai_gym_state = state_.inner.lock().unwrap();
-        reset_channel_tx = ai_gym_state._reset_channel_tx.clone();
-        reset_result_channel_rx = ai_gym_state._result_reset_channel_rx.clone();
+        reset_channel_tx = ai_gym_state._reset_tx.clone();
+        reset_result_channel_rx = ai_gym_state._reset_result_rx.clone();
     }
 
     reset_channel_tx.send(true).unwrap();

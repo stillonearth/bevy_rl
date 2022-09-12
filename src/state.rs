@@ -9,17 +9,17 @@ pub struct AIGymState<A: 'static + Send + Sync + Clone + std::panic::RefUnwindSa
     pub render_image_handles: Vec<Handle<Image>>,
 
     // Sync with engine thread.
-    pub(crate) _step_channel_tx: Sender<Vec<Option<String>>>,
-    pub(crate) _step_channel_rx: Receiver<Vec<Option<String>>>,
+    pub(crate) _step_tx: Sender<Vec<Option<String>>>,
+    pub(crate) _step_rx: Receiver<Vec<Option<String>>>,
 
-    pub(crate) _reset_channel_tx: Sender<bool>,
-    pub(crate) _reset_channel_rx: Receiver<bool>,
+    pub(crate) _reset_tx: Sender<bool>,
+    pub(crate) _reset_rx: Receiver<bool>,
 
-    pub(crate) _step_result_channel_tx: Sender<Vec<bool>>,
-    pub(crate) _step_result_channel_rx: Receiver<Vec<bool>>,
+    pub(crate) _step_result_tx: Sender<Vec<bool>>,
+    pub(crate) _step_result_rx: Receiver<Vec<bool>>,
 
-    pub(crate) _result_reset_channel_tx: Sender<bool>,
-    pub(crate) _result_reset_channel_rx: Receiver<bool>,
+    pub(crate) _reset_result_tx: Sender<bool>,
+    pub(crate) _reset_result_rx: Receiver<bool>,
 
     // State
     pub screens: Vec<image::RgbaImage>,
@@ -36,14 +36,15 @@ impl<A: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe> AIGymState<A>
         let (result_reset_tx, result_reset_rx) = bounded(1);
         Self {
             // Channels
-            _step_channel_tx: step_tx,
-            _step_channel_rx: step_rx,
-            _step_result_channel_tx: result_tx,
-            _step_result_channel_rx: result_rx,
-            _reset_channel_tx: reset_tx,
-            _reset_channel_rx: reset_rx,
-            _result_reset_channel_tx: result_reset_tx,
-            _result_reset_channel_rx: result_reset_rx,
+            _step_tx: step_tx,
+            _step_rx: step_rx,
+            _step_result_tx: result_tx,
+            _step_result_rx: result_rx,
+           
+            _reset_tx: reset_tx,
+            _reset_rx: reset_rx,
+            _reset_result_tx: result_reset_tx,
+            _reset_result_rx: result_reset_rx,
 
             // Render Targets
             render_image_handles: Vec::new(),
@@ -57,31 +58,31 @@ impl<A: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe> AIGymState<A>
     }
 
     pub fn send_step_result(&self, results: Vec<bool>) {
-        if self._step_result_channel_tx.is_empty() {
-            self._step_result_channel_tx.send(results).unwrap();
+        if self._step_result_tx.is_empty() {
+            self._step_result_tx.send(results).unwrap();
         }
     }
 
     pub fn send_reset_result(&self, result: bool) {
-        if self._reset_channel_tx.is_empty() {
-            self._reset_channel_tx.send(result).unwrap();
+        if self._reset_result_tx.is_empty() {
+            self._reset_result_tx.send(result).unwrap();
         }
     }
 
     pub fn receive_action_strings(&self) -> Vec<Option<String>> {
-        return self._step_channel_rx.recv().unwrap();
+        return self._step_rx.recv().unwrap();
     }
 
     pub fn receive_reset_request(&self) {
-        self._reset_channel_rx.recv().unwrap();
+        self._reset_rx.recv().unwrap();
     }
 
     pub fn is_next_action(&self) -> bool {
-        return !self._step_channel_rx.is_empty();
+        return !self._step_rx.is_empty();
     }
 
     pub fn is_reset_request(&self) -> bool {
-        return !self._reset_channel_tx.is_empty();
+        return !self._reset_rx.is_empty();
     }
 
     pub fn set_reward(&mut self, agent_index: usize, score: f32) {
@@ -98,6 +99,6 @@ impl<A: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe> AIGymState<A>
             self.set_reward(i, 0.0);
         }
 
-        self._result_reset_channel_tx.send(true).unwrap();
+        self.send_reset_result(true);
     }
 }

@@ -107,7 +107,7 @@ fn copy_from_gpu_to_ram<T: 'static + Send + Sync + Clone + std::panic::RefUnwind
     };
 
     ai_gym_state_locked.screens = Vec::new();
-    for (i, gp) in ai_gym_state_locked
+    for (_i, gp) in ai_gym_state_locked
         .render_image_handles
         .clone()
         .iter()
@@ -200,6 +200,7 @@ fn setup<T: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe>(
     mut images: ResMut<Assets<Image>>,
     ai_gym_state: ResMut<Arc<Mutex<state::AIGymState<T>>>>,
     ai_gym_settings: Res<AIGymSettings>,
+    mut windows: ResMut<Windows>,
 ) {
     let size = Extent3d {
         width: ai_gym_settings.width,
@@ -253,7 +254,7 @@ fn setup<T: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe>(
     }
 
     let ai_gym_settings = ai_gym_settings.clone();
-    let width = ai_gym_settings.width;
+    let num_agents = ai_gym_settings.num_agents.clone();
 
     thread::spawn(move || {
         gotham::start(
@@ -271,13 +272,39 @@ fn setup<T: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe>(
         .spawn_bundle(Camera2dBundle::default())
         .insert(second_pass_layer);
 
-    for (i, handle) in ai_gym_state.render_image_handles.iter().enumerate() {
-        commands
-            .spawn_bundle(SpriteBundle {
-                texture: handle.clone().into(),
-                transform: Transform::from_xyz(0.0, (width * (i as u32)) as f32, 0.0),
-                ..default()
-            })
-            .insert(second_pass_layer);
+    let window = windows.get_primary_mut().unwrap();
+    let number_of_columns = (num_agents as f32).sqrt().ceil() as u32;
+    let number_of_rows = ((num_agents as f32) / (number_of_columns as f32)).ceil() as u32;
+    let mut frames: Vec<Handle<Image>> = Vec::new();
+    for f in ai_gym_state.render_image_handles.iter() {
+        frames.push(f.clone());
     }
+    let offset_x = (size.width * number_of_rows / 2 - size.width/2) as f32;
+    let offset_y = (size.height * number_of_columns / 2 - size.height/2) as f32;
+
+    for r in 0..number_of_rows {
+        for c in 0..number_of_columns {
+            let y = (r * size.height) as f32;
+            let x = (c * size.width) as f32;
+
+            let i = (c * number_of_columns + r) as usize;
+            if i > (frames.len()-1) {
+                continue;
+            }
+
+            commands
+                .spawn_bundle(SpriteBundle {
+                    texture: frames[i].clone().into(),
+                    transform: Transform::from_xyz(x - offset_x, y - offset_y, 0.0),
+                    ..default()
+                })
+                .insert(second_pass_layer);
+        }
+    }
+
+    window.set_resolution(
+        (size.width * number_of_rows) as f32,
+        (size.height * number_of_columns) as f32,
+    );
+    // window.set_resizable(false);
 }
