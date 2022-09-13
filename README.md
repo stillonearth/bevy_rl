@@ -10,7 +10,7 @@ with [Bevy](https://bevyengine.org/) engine to train AI agents that learn from r
 | bevy version | bevy_rl version |
 | ------------ | :-------------: |
 | 0.7          |      0.0.5      |
-| 0.8          |       0.8       |
+| 0.8.1-bevy081          |       0.8.1       |
 
 ### Features
 
