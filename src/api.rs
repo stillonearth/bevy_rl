@@ -150,5 +150,17 @@ fn reset<T: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe>(
     reset_channel_tx.send(true).unwrap();
     reset_result_channel_rx.recv().unwrap();
 
-    return (state, "ok".to_string());
+    let state_: &GothamState<T> = GothamState::borrow_from(&state);
+    let mut agent_states: Vec<AgentState> = Vec::new();
+    {
+        let ai_gym_state = state_.inner.lock().unwrap();
+        for i in 0..ai_gym_state.rewards.len() {
+            agent_states.push(AgentState {
+                reward: ai_gym_state.rewards[i],
+                is_terminated: ai_gym_state.terminations[i],
+            });
+        }
+    }
+
+    return (state, json!(agent_states).to_string());
 }

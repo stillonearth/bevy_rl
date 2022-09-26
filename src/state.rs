@@ -40,7 +40,7 @@ impl<A: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe> AIGymState<A>
             _step_rx: step_rx,
             _step_result_tx: result_tx,
             _step_result_rx: result_rx,
-           
+
             _reset_tx: reset_tx,
             _reset_rx: reset_rx,
             _reset_result_tx: result_reset_tx,
@@ -95,7 +95,7 @@ impl<A: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe> AIGymState<A>
 
     pub fn reset(&mut self) {
         for i in 0..self.terminations.len() {
-            self.set_terminated(i, true);
+            self.set_terminated(i, false);
             self.set_reward(i, 0.0);
         }
 

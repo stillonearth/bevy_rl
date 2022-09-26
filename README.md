@@ -10,7 +10,7 @@ with [Bevy](https://bevyengine.org/) engine to train AI agents that learn from r
 | bevy version | bevy_rl version |
 | ------------ | :-------------: |
 | 0.7          |      0.0.5      |
-| 0.8          |       0.8       |
+| 0.8          |      0.8.2      |
 
 ### Features
 
@@ -192,3 +192,7 @@ pub(crate) fn turnbased_text_control_system(
 | Camera Pixels     | **GET**  | `http://localhost:7878/screen.png`         |
 | Reset Environment | **POST** | `http://localhost:7878/reset`              |
 | Step              | **POST** | `http://localhost:7878/step` `body=ACTION` |
+
+### Examples
+
+[bevy_rl_shooter](https://github.com/stillonearth/bevy_rl_shooter) — example FPS project
