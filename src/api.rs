@@ -3,13 +3,13 @@ use crossbeam_channel::*;
 use gotham::helpers::http::response::create_response;
 use gotham::middleware::state::StateMiddleware;
 use gotham::pipeline::{single_middleware, single_pipeline};
+use gotham::prelude::StaticResponseExtender;
 use gotham::router::builder::*;
 use gotham::router::Router;
 use gotham::state::StateData;
 use gotham::state::{FromState, State};
-use hyper::{body, Body, Response, StatusCode};
+use hyper::{Body, Response, StatusCode};
 
-use futures::executor;
 use image;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -46,7 +46,10 @@ pub(crate) fn router<T: 'static + Send + Sync + Clone + std::panic::RefUnwindSaf
     // build a router with the chain & pipeline
     build_router(chain, pipelines, |route| {
         route.get("/screen.png").to(screen::<T>);
-        route.post("/step").to(step::<T>);
+        route
+            .get("/step")
+            .with_query_string_extractor::<Payload>()
+            .to(step::<T>);
         route.post("/reset").to(reset::<T>);
     })
 }
@@ -55,44 +58,53 @@ fn screen<T: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe>(
     state: State,
 ) -> (State, Response<Body>) {
     let mut bytes: Vec<u8> = Vec::new();
+    let screens: Vec<image::RgbaImage>;
+    let settings: AIGymSettings;
     {
         let state_: &GothamState<T> = GothamState::borrow_from(&state);
         let state__ = state_.inner.lock().unwrap();
+        screens = state__.screens.clone();
+        settings = state_.settings.clone();
+    }
 
-        let mut all_agents_image = image::RgbaImage::new(
-            state_.settings.width * state_.settings.num_agents,
-            state_.settings.height,
+    let mut all_agents_image =
+        image::RgbaImage::new(settings.width * settings.num_agents, settings.height);
+
+    let mut agent_index = 0;
+
+    for screen in screens.iter() {
+        let image = screen.clone();
+
+        image::imageops::overlay(
+            &mut all_agents_image,
+            &image,
+            (agent_index * settings.width) as i64,
+            0,
         );
 
-        let mut agent_index = 0;
-        for screen in state__.screens.iter() {
-            let image = screen.clone();
-
-            image::imageops::overlay(
-                &mut all_agents_image,
-                &image,
-                (agent_index * state_.settings.width) as i64,
-                0,
-            );
-
-            agent_index += 1;
-        }
-
-        all_agents_image
-            .write_to(&mut Cursor::new(&mut bytes), image::ImageOutputFormat::Png)
-            .unwrap();
+        agent_index += 1;
     }
+
+    all_agents_image
+        .write_to(&mut Cursor::new(&mut bytes), image::ImageOutputFormat::Png)
+        .unwrap();
+
     let response = create_response::<Vec<u8>>(&state, StatusCode::OK, mime::TEXT_PLAIN, bytes);
 
     return (state, response);
 }
 
+#[derive(Deserialize, StateData, StaticResponseExtender)]
+struct Payload {
+    payload: String,
+}
+
 fn step<T: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe>(
     mut state: State,
 ) -> (State, String) {
-    let body_ = Body::take_from(&mut state);
-    let valid_body = executor::block_on(body::to_bytes(body_)).unwrap();
-    let action = String::from_utf8(valid_body.to_vec()).unwrap();
+    let query_param = Payload::take_from(&mut state);
+    let action = query_param.payload;
+
     let err = serde_json::from_str::<Vec<AgentAction>>(&action).err();
     if err.is_some() {
         return (state, err.unwrap().to_string());

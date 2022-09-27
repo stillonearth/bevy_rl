@@ -21,7 +21,6 @@ use bevy::{
 
 use bytemuck;
 use image;
-
 use wgpu::ImageCopyBuffer;
 use wgpu::ImageDataLayout;
 
@@ -71,7 +70,7 @@ impl<T: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe> Plugin for AI
 // Rendering to Image
 // ------------------
 
-pub fn texture_image_layout(desc: &TextureDescriptor<'_>) -> ImageDataLayout {
+fn texture_image_layout(desc: &TextureDescriptor<'_>) -> ImageDataLayout {
     let size = desc.size;
 
     let layout = ImageDataLayout {
@@ -279,8 +278,8 @@ fn setup<T: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe>(
     for f in ai_gym_state.render_image_handles.iter() {
         frames.push(f.clone());
     }
-    let offset_x = (size.width * number_of_rows / 2 - size.width/2) as f32;
-    let offset_y = (size.height * number_of_columns / 2 - size.height/2) as f32;
+    let offset_x = (size.width * number_of_rows / 2 - size.width / 2) as f32;
+    let offset_y = (size.height * number_of_columns / 2 - size.height / 2) as f32;
 
     for r in 0..number_of_rows {
         for c in 0..number_of_columns {
@@ -288,7 +287,7 @@ fn setup<T: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe>(
             let x = (c * size.width) as f32;
 
             let i = (c * number_of_columns + r) as usize;
-            if i > (frames.len()-1) {
+            if i > (frames.len() - 1) {
                 continue;
             }
 
@@ -306,5 +305,5 @@ fn setup<T: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe>(
         (size.width * number_of_rows) as f32,
         (size.height * number_of_columns) as f32,
     );
-    // window.set_resizable(false);
+    window.set_resizable(false);
 }
