@@ -5,29 +5,29 @@
 Build [Reinforcement Learning Gym](https://gym.openai.com/) environments
 with [Bevy](https://bevyengine.org/) engine to train AI agents that learn from raw screen pixels.
 
-### Compatibility
+## Compatibility
 
 | bevy version | bevy_rl version |
 | ------------ | :-------------: |
 | 0.7          |      0.0.5      |
-| 0.8          |      0.8.2      |
+| 0.8          |      0.8.3      |
 
-### Features
+## Features
 
 - Set of APIs to implement OpenAI Gym interface
 - REST API to control an agent
 - Rendering to RAM membuffer
 
-### Usage
+## Usage
 
-#### 1. Define Action Space and Application State
+### 1. Define Action Space and App States
 
 ```rust
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 enum AppState {
-    InGame,  // Actve state
-    Control, // A paused state in which application waits for agent input
+    InGame,  // In-game state
+    Control, // A paused state in which bevy_rl waits for agent input
     Reset,   // A request to reset environment state
 }
 
@@ -47,13 +47,13 @@ bitflags! {
 }
 ```
 
-#### 2. Enable AI Gym Plugin
+### 2. Enable AI Gym Plugin
 
 ```rust
     let gym_settings = AIGymSettings {
         width: 256,
         height: 256,
-        num_agents: 2,
+        num_agents: 16,
     };
 
     app
@@ -62,7 +62,7 @@ bitflags! {
         .insert_resource(Arc::new(Mutex::new(AIGymState::<PlayerActionFlags>::new(
 ```
 
-#### 3. Make sure environment is controllable at discreet time steps
+### 3. Make sure environment is controllable at discreet time steps
 
 ```rust
 struct DelayedControlTimer(Timer);
@@ -102,7 +102,7 @@ fn turnbased_control_system_switch(
 }
 ```
 
-#### 4. Handle Reset & Agent Actions from REST API in Bevy Environment
+### 4. Handle Reset & Agent Actions from REST API in Bevy Environment
 
 ```rust
 pub(crate) fn execute_reset_request(
@@ -185,7 +185,7 @@ pub(crate) fn turnbased_text_control_system(
 }
 ```
 
-### REST API
+## REST API
 
 | Method            | Verb     | bevy_rl version                            |
 | ----------------- | -------- | ------------------------------------------ |
@@ -193,6 +193,6 @@ pub(crate) fn turnbased_text_control_system(
 | Reset Environment | **POST** | `http://localhost:7878/reset`              |
 | Step              | **GET**  | `http://localhost:7878/step` `body=ACTION` |
 
-### Examples
+## Examples
 
 [bevy_rl_shooter](https://github.com/stillonearth/bevy_rl_shooter) — example FPS project
