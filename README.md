@@ -191,7 +191,7 @@ pub(crate) fn turnbased_text_control_system(
 | ----------------- | -------- | ------------------------------------------ |
 | Camera Pixels     | **GET**  | `http://localhost:7878/screen.png`         |
 | Reset Environment | **POST** | `http://localhost:7878/reset`              |
-| Step              | **POST** | `http://localhost:7878/step` `body=ACTION` |
+| Step              | **GET**  | `http://localhost:7878/step` `body=ACTION` |
 
 ### Examples
 
