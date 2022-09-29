@@ -35,9 +35,10 @@ pub struct AIGymSettings {
 }
 
 #[derive(Default, Clone)]
-pub struct AIGymPlugin<T: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe>(
-    pub PhantomData<T>,
-);
+pub struct AIGymPlugin<
+    T: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe,
+    P: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe + serde::Serialize,
+>(pub PhantomData<(T, P)>);
 
 // ----------
 // Components
@@ -46,20 +47,24 @@ pub struct AIGymPlugin<T: 'static + Send + Sync + Clone + std::panic::RefUnwindS
 #[derive(Component)]
 pub struct Interface;
 
-impl<T: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe> Plugin for AIGymPlugin<T> {
+impl<
+        T: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe,
+        P: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe + serde::Serialize,
+    > Plugin for AIGymPlugin<T, P>
+{
     fn build(&self, app: &mut App) {
-        app.add_startup_system(setup::<T>.label("setup_rendering"));
+        app.add_startup_system(setup::<T, P>.label("setup_rendering"));
 
         let ai_gym_state = app
             .world
-            .get_resource::<Arc<Mutex<state::AIGymState<T>>>>()
+            .get_resource::<Arc<Mutex<state::AIGymState<T, P>>>>()
             .unwrap()
             .clone();
 
         let ai_gym_settings = app.world.get_resource::<AIGymSettings>().unwrap().clone();
 
         if let Ok(render_app) = app.get_sub_app_mut(RenderApp) {
-            render_app.add_system_to_stage(RenderStage::Render, copy_from_gpu_to_ram::<T>);
+            render_app.add_system_to_stage(RenderStage::Render, copy_from_gpu_to_ram::<T, P>);
             render_app.insert_resource(ai_gym_state.clone());
             render_app.insert_resource(ai_gym_settings.clone());
         }
@@ -90,11 +95,14 @@ fn texture_image_layout(desc: &TextureDescriptor<'_>) -> ImageDataLayout {
     return layout;
 }
 
-fn copy_from_gpu_to_ram<T: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe>(
+fn copy_from_gpu_to_ram<
+    T: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe,
+    P: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe + serde::Serialize,
+>(
     gpu_images: Res<RenderAssets<Image>>,
     render_device: Res<RenderDevice>,
     render_queue: Res<RenderQueue>,
-    ai_gym_state: Res<Arc<Mutex<state::AIGymState<T>>>>,
+    ai_gym_state: Res<Arc<Mutex<state::AIGymState<T, P>>>>,
     ai_gym_settings: Res<AIGymSettings>,
 ) {
     let mut ai_gym_state_locked = ai_gym_state.lock().unwrap();
@@ -105,7 +113,7 @@ fn copy_from_gpu_to_ram<T: 'static + Send + Sync + Clone + std::panic::RefUnwind
         ..default()
     };
 
-    ai_gym_state_locked.screens = Vec::new();
+    ai_gym_state_locked.visual_observations = Vec::new();
     for (_i, gp) in ai_gym_state_locked
         .render_image_handles
         .clone()
@@ -174,7 +182,9 @@ fn copy_from_gpu_to_ram<T: 'static + Send + Sync + Clone + std::panic::RefUnwind
         // fixing bgra to rgba
         convert_bgra_to_rgba(&mut rgba_image);
 
-        ai_gym_state_locked.screens.push(rgba_image.clone());
+        ai_gym_state_locked
+            .visual_observations
+            .push(rgba_image.clone());
 
         destination.unmap();
     }
@@ -194,10 +204,13 @@ fn convert_bgra_to_rgba(image: &mut image::RgbaImage) {
     }
 }
 
-fn setup<T: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe>(
+fn setup<
+    T: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe,
+    P: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe + serde::Serialize,
+>(
     mut commands: Commands,
     mut images: ResMut<Assets<Image>>,
-    ai_gym_state: ResMut<Arc<Mutex<state::AIGymState<T>>>>,
+    ai_gym_state: ResMut<Arc<Mutex<state::AIGymState<T, P>>>>,
     ai_gym_settings: Res<AIGymSettings>,
     mut windows: ResMut<Windows>,
 ) {
@@ -258,7 +271,7 @@ fn setup<T: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe>(
     thread::spawn(move || {
         gotham::start(
             "127.0.0.1:7878",
-            api::router::<T>(api::GothamState {
+            api::router::<T, P>(api::GothamState {
                 inner: ai_gym_state_2,
                 settings: ai_gym_settings,
             }),

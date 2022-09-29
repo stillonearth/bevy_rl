@@ -4,7 +4,10 @@ use bevy::prelude::*;
 use crossbeam_channel::*;
 
 use crate::AIGymSettings;
-pub struct AIGymState<A: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe> {
+pub struct AIGymState<
+    A: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe,
+    B: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe,
+> {
     // Bevy image handle for the screen
     pub render_image_handles: Vec<Handle<Image>>,
 
@@ -21,14 +24,21 @@ pub struct AIGymState<A: 'static + Send + Sync + Clone + std::panic::RefUnwindSa
     pub(crate) _reset_result_tx: Sender<bool>,
     pub(crate) _reset_result_rx: Receiver<bool>,
 
+    pub(crate) _environment_state: Option<B>,
+
     // State
-    pub screens: Vec<image::RgbaImage>,
+    pub visual_observations: Vec<image::RgbaImage>,
+    pub alt_observation: Option<image::RgbaImage>,
     pub rewards: Vec<f32>,
     pub actions: Vec<Option<A>>,
     pub terminations: Vec<bool>,
 }
 
-impl<A: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe> AIGymState<A> {
+impl<
+        A: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe,
+        B: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe + serde::Serialize,
+    > AIGymState<A, B>
+{
     pub fn new(settings: AIGymSettings) -> Self {
         let (step_tx, step_rx) = bounded(1);
         let (reset_tx, reset_rx) = bounded(1);
@@ -46,11 +56,14 @@ impl<A: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe> AIGymState<A>
             _reset_result_tx: result_reset_tx,
             _reset_result_rx: result_reset_rx,
 
+            _environment_state: None,
+
             // Render Targets
             render_image_handles: Vec::new(),
 
             // State
-            screens: Vec::new(),
+            visual_observations: Vec::new(),
+            alt_observation: None,
             rewards: vec![0.0; settings.num_agents as usize],
             actions: vec![None; settings.num_agents as usize],
             terminations: vec![false; settings.num_agents as usize],
@@ -100,5 +113,9 @@ impl<A: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe> AIGymState<A>
         }
 
         self.send_reset_result(true);
+    }
+
+    pub fn set_env_state(&mut self, state: B) {
+        self._environment_state = Some(state);
     }
 }

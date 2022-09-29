@@ -10,7 +10,7 @@ with [Bevy](https://bevyengine.org/) engine to train AI agents that learn from r
 | bevy version | bevy_rl version |
 | ------------ | :-------------: |
 | 0.7          |      0.0.5      |
-| 0.8          |      0.8.3      |
+| 0.8          |      0.8.4      |
 
 ## Features
 
@@ -18,36 +18,52 @@ with [Bevy](https://bevyengine.org/) engine to train AI agents that learn from r
 - REST API to control an agent
 - Rendering to RAM membuffer
 
+## Changelog
+
+- 0.8.4
+  - Added object representation of observation space
+
 ## Usage
 
-### 1. Define Action Space and App States
+### 1. Define App States
 
-```rust
+````rust
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 enum AppState {
-    InGame,  // In-game state
-    Control, // A paused state in which bevy_rl waits for agent input
+    InGame,  // where all the game logic is executed
+    Control, // A paused state in which bevy_rl waits for agent actions
     Reset,   // A request to reset environment state
 }
 
-// List of possible agent actions (discrete variant)
+### 2. Define Action Space and Observation Space
+
+A action space is a set of actions that an agent can take. An observation space is a set of observations that an agent can see. Action space can be discrete or continuous. Observations should be serializable to JSON with `serde_json` crate.
+
+```rust
+// Action space
 bitflags! {
     #[derive(Default)]
     pub struct PlayerActionFlags: u32 {
-        const IDLE = 1 << 0;
-        const FORWARD = 1 << 1;
-        const BACKWARD = 1 << 2;
-        const LEFT = 1 << 3;
-        const RIGHT = 1 << 4;
-        const TURN_LEFT = 1 << 5;
-        const TURN_RIGHT = 1 << 6;
-        const SHOOT = 1 << 7;
+        const FORWARD = 1 << 0;
+        const BACKWARD = 1 << 1;
+        const LEFT = 1 << 2;
+        const RIGHT = 1 << 3;
     }
 }
-```
 
-### 2. Enable AI Gym Plugin
+// Observation space
+#[derive(Default, Serialize, Clone)]
+pub struct EnvironmentState {
+    pub map: GameMap,
+    pub actors: Vec<Actor>,
+}
+
+````
+
+### 3. Enable AI Gym Plugin
+
+Width and hight should exceed 256, otherwise wgpu will panic.
 
 ```rust
     let gym_settings = AIGymSettings {
@@ -57,18 +73,30 @@ bitflags! {
     };
 
     app
-        // bevy_rl initialization
         .insert_resource(gym_settings.clone())
-        .insert_resource(Arc::new(Mutex::new(AIGymState::<PlayerActionFlags>::new(
+        .insert_resource(Arc::new(Mutex::new(AIGymState::<
+            PlayerActionFlags,
+            EnvironmentState,
+        >::new(gym_settings.clone()))))
+        .add_plugin(AIGymPlugin::<PlayerActionFlags, EnvironmentState>::default())
 ```
 
-### 3. Make sure environment is controllable at discreet time steps
+### 4. Implement environment logic
+
+`DelayedControlTimer` should pause environment execution to allow agents to take actions.
 
 ```rust
 struct DelayedControlTimer(Timer);
 ```
 
+Define systems that implement environment logic.
+
 ```rust
+app.add_system_set(
+    SystemSet::on_update(AppState::InGame)
+        .with_system(turnbased_control_system_switch),
+);
+
 app.insert_resource(DelayedControlTimer(Timer::from_seconds(0.1, true))); // 10 Hz
 app.add_system_set(
     SystemSet::on_update(AppState::Control)
@@ -76,14 +104,9 @@ app.add_system_set(
         .with_system(turnbased_text_control_system) // System that parses user command
         .with_system(execute_reset_request),        // System that performs environment state reset
 );
-
-
-app.add_system_set(
-    SystemSet::on_update(AppState::InGame)
-        .with_system(turnbased_control_system_switch),
-);
-
 ```
+
+`turnbased_control_system_switch` should pause game world and poll `bevy_rl` for agent actions.
 
 ```rust
 fn turnbased_control_system_switch(
@@ -102,7 +125,7 @@ fn turnbased_control_system_switch(
 }
 ```
 
-### 4. Handle Reset & Agent Actions from REST API in Bevy Environment
+`execute_reset_request` handles environment reset request. `turnbased_control_system_switch` in this example parses agent actions and issues commands to agents in environment via `control_agents`.
 
 ```rust
 pub(crate) fn execute_reset_request(
@@ -147,6 +170,7 @@ pub(crate) fn turnbased_text_control_system(
 ) {
     let mut ai_gym_state = ai_gym_state.lock().unwrap();
 
+    // Drop the system if users hasn't sent request this frame
     if !ai_gym_state.is_next_action() {
         return;
     }
@@ -169,14 +193,14 @@ pub(crate) fn turnbased_text_control_system(
             "BACKWARD" => Some(PlayerActionFlags::BACKWARD),
             "LEFT" => Some(PlayerActionFlags::LEFT),
             "RIGHT" => Some(PlayerActionFlags::RIGHT),
-            "TURN_LEFT" => Some(PlayerActionFlags::TURN_LEFT),
-            "TURN_RIGHT" => Some(PlayerActionFlags::TURN_RIGHT),
-            "SHOOT" => Some(PlayerActionFlags::SHOOT),
             _ => None,
         };
 
         actions[i] = action;
     }
+
+    // Send environment state to AI Gym
+    ai_gym_state.set_env_state(EnvironmentState {});
 
     physics_time.resume();
     control_agents(actions, agent_movement_q, collision_events, event_gun_shot);
@@ -185,13 +209,29 @@ pub(crate) fn turnbased_text_control_system(
 }
 ```
 
+## AIGymState API
+
+| Method                                             | Description                                |
+| -------------------------------------------------- | ------------------------------------------ |
+| `send_step_result(results: Vec<bool>) `            | Send upon agents interactions are complete |
+| `send_reset_result(result: bool) `                 | Send when reset request is complete        |
+| `receive_action_strings(Vec<Option<String>>)`      | Recieve environment for agent actions      |
+| `receive_reset_request()`                          | Recieve environment for reset request      |
+| `is_next_action() -> bool`                         | Whether agent actions are supplied         |
+| `is_reset_request() -> bool`                       | Whether reset request was sent             |
+| `set_reward(agent_index: usize, score: f32)`       | Set reward for an agent                    |
+| `set_terminated(agent_index: usize, result: bool)` | Set termination status for an agent        |
+| `reset()`                                          | Reset bevy_rl state                        |
+| `set_env_state(state: B)`                          | Set current environment state              |
+
 ## REST API
 
-| Method            | Verb     | bevy_rl version                            |
-| ----------------- | -------- | ------------------------------------------ |
-| Camera Pixels     | **GET**  | `http://localhost:7878/screen.png`         |
-| Reset Environment | **POST** | `http://localhost:7878/reset`              |
-| Step              | **GET**  | `http://localhost:7878/step` `body=ACTION` |
+| Method            | Verb     | bevy_rl version                               |
+| ----------------- | -------- | --------------------------------------------- |
+| Camera Pixels     | **GET**  | `http://localhost:7878/visual_observations`   |
+| State             | **GET**  | `http://localhost:7878/state`                 |
+| Reset Environment | **POST** | `http://localhost:7878/reset`                 |
+| Step              | **GET**  | `http://localhost:7878/step` `payload=ACTION` |
 
 ## Examples
 
