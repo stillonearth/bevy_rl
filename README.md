@@ -1,7 +1,5 @@
 # bevy_rl
 
-<img width="209" alt="image" src="https://user-images.githubusercontent.com/97428129/168558015-e6ddd435-dfdf-4f03-b352-070074f5a392.png">
-
 Build [Reinforcement Learning Gym](https://gym.openai.com/) environments
 with [Bevy](https://bevyengine.org/) engine to train AI agents that learn from raw screen pixels.
 
