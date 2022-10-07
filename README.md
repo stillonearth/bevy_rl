@@ -25,7 +25,7 @@ with [Bevy](https://bevyengine.org/) engine to train AI agents that learn from r
 
 ### 1. Define App States
 
-````rust
+```rust
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 enum AppState {
@@ -33,6 +33,7 @@ enum AppState {
     Control, // A paused state in which bevy_rl waits for agent actions
     Reset,   // A request to reset environment state
 }
+```
 
 ### 2. Define Action Space and Observation Space
 
