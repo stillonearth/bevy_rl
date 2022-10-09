@@ -1,6 +1,6 @@
 # 🏋️‍♀️ bevy_rl
 
-🏗️ Build 🤔 Reinforcement Learning 🏋🏿‍♂️ [Gym](https://gym.openai.com/) environments with 🕊 [Bevy](https://bevyengine.org/) engine to train 🧠 AI 👾 agents that 💡 learn from 📺 screen pixels.
+### 🏗️ Build 🤔 Reinforcement Learning 🏋🏿‍♂️ [Gym](https://gym.openai.com/) environments with 🕊 [Bevy](https://bevyengine.org/) engine to train 👾 AI agents that 💡 learn from 📺 screen pixels.
 
 ## Compatibility
 
