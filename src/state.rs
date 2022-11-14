@@ -1,10 +1,14 @@
+use std::sync::{Arc, Mutex};
+
 use image;
 
 use bevy::prelude::*;
 use crossbeam_channel::*;
 
-use crate::AIGymSettings;
-pub struct AIGymState<
+use crate::render;
+
+#[derive(Resource)]
+pub struct AIGymStateInner<
     A: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe,
     B: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe,
 > {
@@ -37,9 +41,9 @@ pub struct AIGymState<
 impl<
         A: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe,
         B: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe + serde::Serialize,
-    > AIGymState<A, B>
+    > AIGymStateInner<A, B>
 {
-    pub fn new(settings: AIGymSettings) -> Self {
+    pub fn new(settings: render::AIGymSettings) -> Self {
         let (step_tx, step_rx) = bounded(1);
         let (reset_tx, reset_rx) = bounded(1);
         let (result_tx, result_rx) = bounded(1);
@@ -118,4 +122,12 @@ impl<
     pub fn set_env_state(&mut self, state: B) {
         self._environment_state = Some(state);
     }
+}
+
+#[derive(Resource, Clone)]
+pub struct AIGymState<
+    A: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe,
+    B: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe,
+> {
+    pub guard: Arc<Mutex<AIGymStateInner<A, B>>>,
 }
