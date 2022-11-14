@@ -1,7 +1,6 @@
-# bevy_rl
+# 🏋️‍♀️ bevy_rl
 
-Build [Reinforcement Learning Gym](https://gym.openai.com/) environments
-with [Bevy](https://bevyengine.org/) engine to train AI agents that learn from raw screen pixels.
+🏗️ Build 🤔 Reinforcement Learning 🏋🏿‍♂️ [Gym](https://gym.openai.com/) environments with 🕊 [Bevy](https://bevyengine.org/) engine to train 👾 AI agents that 💡 learn from 📺 screen pixels.
 
 ## Compatibility
 
@@ -11,22 +10,22 @@ with [Bevy](https://bevyengine.org/) engine to train AI agents that learn from r
 | 0.8          |      0.8.4      |
 | 0.9          |      0.9.0      |
 
-## Features
+## 📝Features
 
 - Set of APIs to implement OpenAI Gym interface
 - REST API to control an agent
 - Rendering to RAM membuffer
 
-## Changelog
+## 📋 Changelog
 
 - 0.8.4
   - Added object representation of observation space
 
-## Usage
+## 👩‍💻 Usage
 
 ### 1. Define App States
 
-````rust
+```rust
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 enum AppState {
@@ -34,6 +33,7 @@ enum AppState {
     Control, // A paused state in which bevy_rl waits for agent actions
     Reset,   // A request to reset environment state
 }
+```
 
 ### 2. Define Action Space and Observation Space
 
@@ -58,7 +58,7 @@ pub struct EnvironmentState {
     pub actors: Vec<Actor>,
 }
 
-````
+```
 
 ### 3. Enable AI Gym Plugin
 
@@ -80,7 +80,7 @@ Width and hight should exceed 256, otherwise wgpu will panic.
         .add_plugin(AIGymPlugin::<PlayerActionFlags, EnvironmentState>::default())
 ```
 
-### 4. Implement environment logic
+### 4. Implement Environment Logic
 
 `DelayedControlTimer` should pause environment execution to allow agents to take actions.
 
@@ -208,7 +208,7 @@ pub(crate) fn turnbased_text_control_system(
 }
 ```
 
-## AIGymState API
+## 💻 AIGymState API
 
 | Method                                             | Description                                |
 | -------------------------------------------------- | ------------------------------------------ |
@@ -223,7 +223,7 @@ pub(crate) fn turnbased_text_control_system(
 | `reset()`                                          | Reset bevy_rl state                        |
 | `set_env_state(state: B)`                          | Set current environment state              |
 
-## REST API
+## 🌐 REST API
 
 | Method            | Verb     | bevy_rl version                               |
 | ----------------- | -------- | --------------------------------------------- |
@@ -232,6 +232,6 @@ pub(crate) fn turnbased_text_control_system(
 | Reset Environment | **POST** | `http://localhost:7878/reset`                 |
 | Step              | **GET**  | `http://localhost:7878/step` `payload=ACTION` |
 
-## Examples
+## ✍️ Examples
 
 [bevy_rl_shooter](https://github.com/stillonearth/bevy_rl_shooter) — example FPS project
