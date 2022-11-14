@@ -87,7 +87,7 @@ impl<
     }
 
     pub fn receive_action_strings(&self) -> Vec<Option<String>> {
-        return self._step_rx.recv().unwrap();
+        self._step_rx.recv().unwrap()
     }
 
     pub fn receive_reset_request(&self) {
@@ -95,11 +95,11 @@ impl<
     }
 
     pub fn is_next_action(&self) -> bool {
-        return !self._step_rx.is_empty();
+        !self._step_rx.is_empty()
     }
 
     pub fn is_reset_request(&self) -> bool {
-        return !self._reset_rx.is_empty();
+        !self._reset_rx.is_empty()
     }
 
     pub fn set_reward(&mut self, agent_index: usize, score: f32) {

@@ -10,7 +10,6 @@ use gotham::state::StateData;
 use gotham::state::{FromState, State};
 use hyper::{Body, Response, StatusCode};
 
-use image;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::io::Cursor;
@@ -80,19 +79,16 @@ fn visual_observations<
     let mut bytes: Vec<u8> = Vec::new();
     let mut all_agents_image =
         image::RgbaImage::new(settings.width * settings.num_agents, settings.height);
-    let mut agent_index = 0;
 
-    for screen in screens.iter() {
+    for (agent_index, screen) in screens.iter().enumerate() {
         let image = screen.clone();
 
         image::imageops::overlay(
             &mut all_agents_image,
             &image,
-            (agent_index * settings.width) as i64,
+            ((agent_index as u32) * settings.width) as i64,
             0,
         );
-
-        agent_index += 1;
     }
 
     all_agents_image
@@ -101,7 +97,7 @@ fn visual_observations<
 
     let response = create_response::<Vec<u8>>(&state, StatusCode::OK, mime::IMAGE_PNG, bytes);
 
-    return (state, response);
+    (state, response)
 }
 
 #[derive(Deserialize, StateData, StaticResponseExtender)]
@@ -118,7 +114,7 @@ fn step<
     let query_param = StepQueryString::take_from(&mut state);
 
     let err = serde_json::from_str::<Vec<AgentAction>>(&query_param.payload).err();
-    if err.is_some() {
+    if let Some(..) = err {
         return (state, err.unwrap().to_string());
     }
     let agent_actions: Vec<AgentAction> = serde_json::from_str(&query_param.payload).unwrap();
@@ -156,7 +152,7 @@ fn step<
         }
     }
 
-    return (state, json!(agent_states).to_string());
+    (state, json!(agent_states).to_string())
 }
 
 fn reset<
@@ -189,7 +185,7 @@ fn reset<
         }
     }
 
-    return (state, json!(agent_states).to_string());
+    (state, json!(agent_states).to_string())
 }
 
 fn env_state<
@@ -201,5 +197,5 @@ fn env_state<
     let state_: &GothamState<T, P> = GothamState::borrow_from(&state);
     let env_state = state_.inner.lock().unwrap()._environment_state.clone();
 
-    return (state, json!(env_state).to_string());
+    (state, json!(env_state).to_string())
 }
