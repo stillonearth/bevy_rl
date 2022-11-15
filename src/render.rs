@@ -265,7 +265,7 @@ fn setup<
         gotham::start(
             "127.0.0.1:7878",
             api::router::<T, P>(api::GothamState {
-                inner: ai_gym_state_2.into(),
+                inner: ai_gym_state_2,
                 settings: ai_gym_settings,
             }),
         )
