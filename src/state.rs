@@ -124,10 +124,8 @@ impl<
     }
 }
 
-#[derive(Resource, Clone)]
+#[derive(Resource, Deref, DerefMut, Clone)]
 pub struct AIGymState<
     A: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe,
     B: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe,
-> {
-    pub guard: Arc<Mutex<AIGymStateInner<A, B>>>,
-}
+>(Arc<Mutex<AIGymStateInner<A, B>>>);

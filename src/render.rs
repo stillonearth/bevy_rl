@@ -73,8 +73,6 @@ impl<
 fn texture_image_layout(desc: &TextureDescriptor<'_>) -> ImageDataLayout {
     let size = desc.size;
 
-    
-
     ImageDataLayout {
         bytes_per_row: if size.height > 1 {
             NonZeroU32::new(size.width * (desc.format.describe().block_size as u32))
@@ -100,7 +98,7 @@ fn copy_from_gpu_to_ram<
     ai_gym_state: Res<state::AIGymState<T, P>>,
     ai_gym_settings: Res<AIGymSettings>,
 ) {
-    let mut ai_gym_state_locked = ai_gym_state.guard.lock().unwrap();
+    let mut ai_gym_state_locked = ai_gym_state.lock().unwrap();
     let device = render_device.wgpu_device();
     let size = Extent3d {
         width: ai_gym_settings.width,
@@ -218,7 +216,7 @@ fn setup<
     let ai_gym_state_1 = ai_gym_state.into_inner().clone();
     let ai_gym_state_2 = ai_gym_state_1.clone();
 
-    let mut ai_gym_state = ai_gym_state_1.guard.lock().unwrap();
+    let mut ai_gym_state = ai_gym_state_1.lock().unwrap();
 
     for _ in 0..ai_gym_settings.num_agents {
         // This is the texture that will be rendered to.
@@ -267,7 +265,7 @@ fn setup<
         gotham::start(
             "127.0.0.1:7878",
             api::router::<T, P>(api::GothamState {
-                inner: ai_gym_state_2.guard,
+                inner: ai_gym_state_2.into(),
                 settings: ai_gym_settings,
             }),
         )
