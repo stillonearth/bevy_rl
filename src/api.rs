@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::io::Cursor;
 
-use crate::{render, state};
+use crate::{state, AIGymSettings};
 
 #[derive(Serialize, Deserialize)]
 pub(crate) struct AgentState {
@@ -33,7 +33,7 @@ pub(crate) struct GothamState<
     P: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe + serde::Serialize,
 > {
     pub(crate) inner: state::AIGymState<T, P>,
-    pub(crate) settings: render::AIGymSettings,
+    pub(crate) settings: AIGymSettings,
 }
 
 pub(crate) fn router<
@@ -67,7 +67,7 @@ fn visual_observations<
     state: State,
 ) -> (State, Response<Body>) {
     let screens: Vec<image::RgbaImage>;
-    let settings: render::AIGymSettings;
+    let settings: AIGymSettings;
     {
         let state_: &GothamState<T, P> = GothamState::borrow_from(&state);
         let state__ = state_.inner.lock().unwrap();

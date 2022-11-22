@@ -20,14 +20,7 @@ use image;
 use wgpu::ImageCopyBuffer;
 use wgpu::ImageDataLayout;
 
-use crate::{api, state};
-
-#[derive(Clone, Resource)]
-pub struct AIGymSettings {
-    pub width: u32,
-    pub height: u32,
-    pub num_agents: u32,
-}
+use crate::{api, state, AIGymSettings};
 
 #[derive(Default, Clone)]
 pub struct AIGymPlugin<

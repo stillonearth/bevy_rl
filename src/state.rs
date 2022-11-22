@@ -5,7 +5,7 @@ use image;
 use bevy::prelude::*;
 use crossbeam_channel::*;
 
-use crate::render;
+use crate::AIGymSettings;
 
 #[derive(Resource)]
 pub struct AIGymStateInner<
@@ -40,10 +40,10 @@ pub struct AIGymStateInner<
 
 impl<
         A: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe,
-        B: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe + serde::Serialize,
+        B: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe,
     > AIGymStateInner<A, B>
 {
-    pub fn new(settings: render::AIGymSettings) -> Self {
+    pub fn new(settings: AIGymSettings) -> Self {
         let (step_tx, step_rx) = bounded(1);
         let (reset_tx, reset_rx) = bounded(1);
         let (result_tx, result_rx) = bounded(1);
@@ -128,4 +128,14 @@ impl<
 pub struct AIGymState<
     A: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe,
     B: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe,
->(Arc<Mutex<AIGymStateInner<A, B>>>);
+>(pub Arc<Mutex<AIGymStateInner<A, B>>>);
+
+impl<
+        A: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe,
+        B: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe,
+    > AIGymState<A, B>
+{
+    pub fn new(settings: AIGymSettings) -> Self {
+        Self(Arc::new(Mutex::new(AIGymStateInner::new(settings))))
+    }
+}
