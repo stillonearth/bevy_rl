@@ -78,10 +78,10 @@ Width and hight should exceed 256, otherwise wgpu will panic.
 
     app
         .insert_resource(gym_settings.clone())
-        .insert_resource(Arc::new(Mutex::new(AIGymState::<
+        .insert_resource(AIGymState::<
             PlayerActionFlags,
             EnvironmentState,
-        >::new(gym_settings.clone()))))
+        >::new(gym_settings.clone()))
         .add_plugin(AIGymPlugin::<PlayerActionFlags, EnvironmentState>::default())
 ```
 
@@ -117,7 +117,7 @@ fn turnbased_control_system_switch(
     mut app_state: ResMut<State<AppState>>,
     time: Res<Time>,
     mut timer: ResMut<DelayedControlTimer>,
-    ai_gym_state: ResMut<Arc<Mutex<AIGymState<PlayerActionFlags>>>>,
+    ai_gym_state: ResMut<AIGymState<PlayerActionFlags>>,
 ) {
     if timer.0.tick(time.delta()).just_finished() {
         app_state.push(AppState::Control);
@@ -134,7 +134,7 @@ fn turnbased_control_system_switch(
 ```rust
 pub(crate) fn execute_reset_request(
     mut app_state: ResMut<State<AppState>>,
-    ai_gym_state: ResMut<Arc<Mutex<AIGymState<PlayerActionFlags>>>>,
+    ai_gym_state: ResMut<AIGymState<PlayerActionFlags>>,
 ) {
     let ai_gym_state = ai_gym_state.lock().unwrap();
     if !ai_gym_state.is_reset_request() {
@@ -149,7 +149,7 @@ pub(crate) fn turnbased_control_system_switch(
     mut app_state: ResMut<State<AppState>>,
     time: Res<Time>,
     mut timer: ResMut<DelayedControlTimer>,
-    ai_gym_state: ResMut<Arc<Mutex<AIGymState<PlayerActionFlags>>>>,
+    ai_gym_state: ResMut<AIGymState<PlayerActionFlags>>,
     ai_gym_settings: Res<AIGymSettings>,
     mut physics_time: ResMut<PhysicsTime>,
 ) {
@@ -167,7 +167,7 @@ pub(crate) fn turnbased_text_control_system(
     agent_movement_q: Query<(&mut heron::prelude::Velocity, &mut Transform, &Actor)>,
     collision_events: EventReader<CollisionEvent>,
     event_gun_shot: EventWriter<EventGunShot>,
-    ai_gym_state: ResMut<Arc<Mutex<AIGymState<PlayerActionFlags>>>>,
+    ai_gym_state: ResMut<AIGymState<PlayerActionFlags>>,
     ai_gym_settings: Res<AIGymSettings>,
     mut app_state: ResMut<State<AppState>>,
     mut physics_time: ResMut<PhysicsTime>,
