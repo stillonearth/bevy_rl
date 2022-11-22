@@ -8,7 +8,7 @@
 | ------------ | :-------------: |
 | 0.7          |      0.0.5      |
 | 0.8          |      0.8.4      |
-| 0.9          |      0.9.1      |
+| 0.9          |      0.9.2      |
 
 ## 📝Features
 
@@ -20,6 +20,11 @@
 
 - 0.8.4
   - Added object representation of observation space
+- 0.9.1
+  - Bevy v.0.9 support
+  - Minor changes in `Deref` ergonomics
+- 0.9.2
+  - Fixed a bug when `AIGymState` could not be initialized outside of the crate
 
 ## 👩‍💻 Usage
 
