@@ -22,7 +22,7 @@ pub(crate) struct AgentState {
     is_terminated: bool,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub(crate) struct AgentAction {
     action: Option<String>,
 }

@@ -8,7 +8,7 @@
 | ------------ | :-------------: |
 | 0.7          |      0.0.5      |
 | 0.8          |      0.8.4      |
-| 0.9          |      0.9.3      |
+| 0.9          |      0.9.4      |
 
 ## 📝Features
 
@@ -25,6 +25,8 @@
   - Minor changes in `Deref` ergonomics
 - 0.9.3
   - Fixed a bug when `AIGymState` could not be initialized outside of the crate
+- 0.9.4
+  - Option to use crate without camera rendering to buffer
 
 ## 👩‍💻 Usage
 
@@ -46,21 +48,15 @@ A action space is a set of actions that an agent can take. An observation space 
 
 ```rust
 // Action space
-bitflags! {
-    #[derive(Default)]
-    pub struct PlayerActionFlags: u32 {
-        const FORWARD = 1 << 0;
-        const BACKWARD = 1 << 1;
-        const LEFT = 1 << 2;
-        const RIGHT = 1 << 3;
-    }
+#[derive(Default)]
+pub struct Actions {
+    ...
 }
 
 // Observation space
 #[derive(Default, Serialize, Clone)]
-pub struct EnvironmentState {
-    pub map: GameMap,
-    pub actors: Vec<Actor>,
+pub struct State {
+    ...
 }
 
 ```
@@ -70,19 +66,18 @@ pub struct EnvironmentState {
 Width and hight should exceed 256, otherwise wgpu will panic.
 
 ```rust
-    let gym_settings = AIGymSettings {
-        width: 256,
-        height: 256,
-        num_agents: 16,
-    };
+let gym_settings = AIGymSettings {
+    width: 256,
+    height: 256,
+    num_agents: 16,
+    no_graphics: false,
 
-    app
-        .insert_resource(gym_settings.clone())
-        .insert_resource(Arc::new(Mutex::new(AIGymState::<
-            PlayerActionFlags,
-            EnvironmentState,
-        >::new(gym_settings.clone()))))
-        .add_plugin(AIGymPlugin::<PlayerActionFlags, EnvironmentState>::default())
+};
+
+app
+    .insert_resource(gym_settings.clone())
+    .insert_resource(Arc::new(Mutex::new(AIGymState::<Actions,State>::new(gym_settings.clone()))))
+    .add_plugin(AIGymPlugin::<Actions, State>::default())
 ```
 
 ### 4. Implement Environment Logic
@@ -110,108 +105,9 @@ app.add_system_set(
 );
 ```
 
-`turnbased_control_system_switch` should pause game world and poll `bevy_rl` for agent actions.
-
-```rust
-fn turnbased_control_system_switch(
-    mut app_state: ResMut<State<AppState>>,
-    time: Res<Time>,
-    mut timer: ResMut<DelayedControlTimer>,
-    ai_gym_state: ResMut<Arc<Mutex<AIGymState<PlayerActionFlags>>>>,
-) {
-    if timer.0.tick(time.delta()).just_finished() {
-        app_state.push(AppState::Control);
-        physics_time.pause();
-
-        let ai_gym_state = ai_gym_state.lock().unwrap();
-        ai_gym_state.send_step_result(true);
-    }
-}
-```
-
-`execute_reset_request` handles environment reset request. `turnbased_control_system_switch` in this example parses agent actions and issues commands to agents in environment via `control_agents`.
-
-```rust
-pub(crate) fn execute_reset_request(
-    mut app_state: ResMut<State<AppState>>,
-    ai_gym_state: ResMut<Arc<Mutex<AIGymState<PlayerActionFlags>>>>,
-) {
-    let ai_gym_state = ai_gym_state.lock().unwrap();
-    if !ai_gym_state.is_reset_request() {
-        return;
-    }
-
-    ai_gym_state.receive_reset_request();
-    app_state.set(AppState::Reset).unwrap();
-}
-
-pub(crate) fn turnbased_control_system_switch(
-    mut app_state: ResMut<State<AppState>>,
-    time: Res<Time>,
-    mut timer: ResMut<DelayedControlTimer>,
-    ai_gym_state: ResMut<Arc<Mutex<AIGymState<PlayerActionFlags>>>>,
-    ai_gym_settings: Res<AIGymSettings>,
-    mut physics_time: ResMut<PhysicsTime>,
-) {
-    if timer.0.tick(time.delta()).just_finished() {
-        app_state.overwrite_push(AppState::Control).unwrap();
-        physics_time.pause();
-
-        let ai_gym_state = ai_gym_state.lock().unwrap();
-        let results = (0..ai_gym_settings.num_agents).map(|_| true).collect();
-        ai_gym_state.send_step_result(results);
-    }
-}
-
-pub(crate) fn turnbased_text_control_system(
-    agent_movement_q: Query<(&mut heron::prelude::Velocity, &mut Transform, &Actor)>,
-    collision_events: EventReader<CollisionEvent>,
-    event_gun_shot: EventWriter<EventGunShot>,
-    ai_gym_state: ResMut<Arc<Mutex<AIGymState<PlayerActionFlags>>>>,
-    ai_gym_settings: Res<AIGymSettings>,
-    mut app_state: ResMut<State<AppState>>,
-    mut physics_time: ResMut<PhysicsTime>,
-) {
-    let mut ai_gym_state = ai_gym_state.lock().unwrap();
-
-    // Drop the system if users hasn't sent request this frame
-    if !ai_gym_state.is_next_action() {
-        return;
-    }
-
-    let unparsed_actions = ai_gym_state.receive_action_strings();
-    let mut actions: Vec<Option<PlayerActionFlags>> =
-        (0..ai_gym_settings.num_agents).map(|_| None).collect();
-
-    for i in 0..unparsed_actions.len() {
-        let unparsed_action = unparsed_actions[i].clone();
-        ai_gym_state.set_reward(i, 0.0);
-
-        if unparsed_action.is_none() {
-            actions[i] = None;
-            continue;
-        }
-
-        let action = match unparsed_action.unwrap().as_str() {
-            "FORWARD" => Some(PlayerActionFlags::FORWARD),
-            "BACKWARD" => Some(PlayerActionFlags::BACKWARD),
-            "LEFT" => Some(PlayerActionFlags::LEFT),
-            "RIGHT" => Some(PlayerActionFlags::RIGHT),
-            _ => None,
-        };
-
-        actions[i] = action;
-    }
-
-    // Send environment state to AI Gym
-    ai_gym_state.set_env_state(EnvironmentState {});
-
-    physics_time.resume();
-    control_agents(actions, agent_movement_q, collision_events, event_gun_shot);
-
-    app_state.pop().unwrap();
-}
-```
+- `turnbased_control_system_switch` should pause game world and poll `bevy_rl` for agent actions.
+- `execute_reset_request` handles environment reset request.
+  `turnbased_control_system_switch` in parses agent actions and issues commands to agents in environment.
 
 ## 💻 AIGymState API
 

@@ -32,7 +32,6 @@ pub struct AIGymStateInner<
 
     // State
     pub visual_observations: Vec<image::RgbaImage>,
-    pub alt_observation: Option<image::RgbaImage>,
     pub rewards: Vec<f32>,
     pub actions: Vec<Option<A>>,
     pub terminations: Vec<bool>,
@@ -67,7 +66,6 @@ impl<
 
             // State
             visual_observations: Vec::new(),
-            alt_observation: None,
             rewards: vec![0.0; settings.num_agents as usize],
             actions: vec![None; settings.num_agents as usize],
             terminations: vec![false; settings.num_agents as usize],

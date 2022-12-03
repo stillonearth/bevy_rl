@@ -41,6 +41,11 @@ impl<
     > Plugin for AIGymPlugin<T, P>
 {
     fn build(&self, app: &mut App) {
+        let ai_gym_settings = app.world.get_resource::<AIGymSettings>().unwrap().clone();
+        if ai_gym_settings.no_graphics {
+            return;
+        }
+
         app.add_startup_system(setup::<T, P>.label("setup_rendering"));
 
         let ai_gym_state = app
@@ -48,8 +53,6 @@ impl<
             .get_resource::<state::AIGymState<T, P>>()
             .unwrap()
             .clone();
-
-        let ai_gym_settings = app.world.get_resource::<AIGymSettings>().unwrap().clone();
 
         if let Ok(render_app) = app.get_sub_app_mut(RenderApp) {
             render_app.add_system_to_stage(RenderStage::Render, copy_from_gpu_to_ram::<T, P>);
@@ -211,7 +214,25 @@ fn setup<
 
     let mut ai_gym_state = ai_gym_state_1.lock().unwrap();
 
-    for _ in 0..ai_gym_settings.num_agents {
+    let ai_gym_settings = ai_gym_settings.clone();
+    let num_agents = ai_gym_settings.num_agents;
+    let no_graphics = !ai_gym_settings.no_graphics;
+
+    thread::spawn(move || {
+        gotham::start(
+            "127.0.0.1:7878",
+            api::router::<T, P>(api::GothamState {
+                inner: ai_gym_state_2,
+                settings: ai_gym_settings,
+            }),
+        )
+    });
+
+    if no_graphics {
+        return;
+    }
+
+    for _ in 0..num_agents {
         // This is the texture that will be rendered to.
         let mut render_image = Image {
             texture_descriptor: TextureDescriptor {
@@ -250,19 +271,6 @@ fn setup<
         };
         display_image.resize(size);
     }
-
-    let ai_gym_settings = ai_gym_settings.clone();
-    let num_agents = ai_gym_settings.num_agents;
-
-    thread::spawn(move || {
-        gotham::start(
-            "127.0.0.1:7878",
-            api::router::<T, P>(api::GothamState {
-                inner: ai_gym_state_2,
-                settings: ai_gym_settings,
-            }),
-        )
-    });
 
     let second_pass_layer = RenderLayers::layer(1);
 
