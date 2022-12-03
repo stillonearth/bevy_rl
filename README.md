@@ -71,7 +71,6 @@ let gym_settings = AIGymSettings {
     height: 256,
     num_agents: 16,
     no_graphics: false,
-
 };
 
 app
@@ -107,7 +106,7 @@ app.add_system_set(
 
 - `turnbased_control_system_switch` should pause game world and poll `bevy_rl` for agent actions.
 - `execute_reset_request` handles environment reset request.
-  `turnbased_control_system_switch` in parses agent actions and issues commands to agents in environment.
+- `turnbased_text_control_system` parses agent actions and issues commands to agents in environment.
 
 ## 💻 AIGymState API
 
