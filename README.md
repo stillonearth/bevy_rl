@@ -1,6 +1,6 @@
 # 🏋️‍♀️ bevy_rl
 
-🏗️ Build 🤔 Reinforcement Learning 🏋🏿‍♂️ [Gym](https://gym.openai.com/) environments with 🕊 [Bevy](https://bevyengine.org/) engine to train 👾 AI agents that 💡 learn from 📺 screen pixels.
+🏗️ Build 🤔 Reinforcement Learning 🏋🏿‍♂️ [Gym](https://gym.openai.com/) environments with 🕊 [Bevy](https://bevyengine.org/) engine to train 👾 AI agents that 💡 can learn from 📺 screen pixels or defined obeservation state.
 
 ## Compatibility
 
@@ -32,8 +32,9 @@
 
 ### 1. Define App States
 
-```rust
+Environment needs to have multiple state, where different system are executed. Typicall you will need to implement InGame, Control and Reset state.
 
+```rust
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 enum AppState {
     InGame,  // where all the game logic is executed
@@ -44,7 +45,7 @@ enum AppState {
 
 ### 2. Define Action Space and Observation Space
 
-A action space is a set of actions that an agent can take. An observation space is a set of observations that an agent can see. Action space can be discrete or continuous. Observations should be serializable to JSON with `serde_json` crate.
+Define action and observation spaces. Observation space needs to be Serializable because it's exported via REST API. Action space can be discreet or continuous.
 
 ```rust
 // Action space
@@ -58,7 +59,6 @@ pub struct Actions {
 pub struct State {
     ...
 }
-
 ```
 
 ### 3. Enable AI Gym Plugin
@@ -67,10 +67,10 @@ Width and hight should exceed 256, otherwise wgpu will panic.
 
 ```rust
 let gym_settings = AIGymSettings {
-    width: 256,
+    width: 256, // set if you need visual observations as state
     height: 256,
-    num_agents: 16,
-    no_graphics: false,
+    num_agents: 1,
+    no_graphics: false, // you can disable rendering to buffer
 };
 
 app
@@ -79,34 +79,143 @@ app
     .add_plugin(AIGymPlugin::<Actions, State>::default())
 ```
 
+### 3.1 (Optional) Enable Rendering to Buffer
+
+```rust
+pub(crate) fn spawn_cameras(
+    ai_gym_settings: Res<AIGymSettings>,
+    ai_gym_state: Res<AIGymState<Actions, State>>,
+) {
+    let mut ai_gym_state = ai_gym_state.lock().unwrap();
+    for i in 0..ai_gym_settings.num_agents {
+        let render_image_handle = ai_gym_state.render_image_handles[i as usize].clone();
+        let render_target = RenderTarget::Image(render_image_handle);
+        let camera_bundle = Camera3dBundle {
+            camera: Camera {
+                target: render_target,
+                priority: -1,
+                ..default()
+            },
+            ..default()
+        };
+        commands.spawn(camera_bundle);
+    }
+}
+```
+
 ### 4. Implement Environment Logic
 
 `DelayedControlTimer` should pause environment execution to allow agents to take actions.
 
 ```rust
+#[derive(Resource)]
 struct DelayedControlTimer(Timer);
 ```
 
 Define systems that implement environment logic.
 
 ```rust
+app.add_startup_system(spawn_cameras);
 app.add_system_set(
     SystemSet::on_update(AppState::InGame)
-        .with_system(turnbased_control_system_switch),
+        .with_system(control_switch),
 );
-
 app.insert_resource(DelayedControlTimer(Timer::from_seconds(0.1, true))); // 10 Hz
 app.add_system_set(
     SystemSet::on_update(AppState::Control)
         // Game Systems
-        .with_system(turnbased_text_control_system) // System that parses user command
-        .with_system(execute_reset_request),        // System that performs environment state reset
+        .with_system(process_control_request) // System that parses user command
+        .with_system(process_reset_request),  // System that performs environment state reset
+);
+app.add_system_set(
+    SystemSet::on_enter(AppState::Reset)
+        .with_system(reset_envvironment) // System resets environment to initial state
 );
 ```
 
-- `turnbased_control_system_switch` should pause game world and poll `bevy_rl` for agent actions.
-- `execute_reset_request` handles environment reset request.
-- `turnbased_text_control_system` parses agent actions and issues commands to agents in environment.
+#### `control_switch` should pause game world and poll `bevy_rl` for agent actions.
+
+```rust
+pub(crate) fn control_switch(
+    mut app_state: ResMut<State<AppState>>,
+    time: Res<Time>,
+    mut timer: ResMut<DelayedControlTimer>,
+    ai_gym_state: ResMut<AIGymState<Actions, State>>,
+    ai_gym_settings: Res<AIGymSettings>,
+    mut physics_engine: ResMut<PhysicsEngine>,
+) {
+  // This controls control frequency of the environment
+  if timer.0.tick(time.delta()).just_finished() {
+
+      // Set current state to control to disable simulation systems
+      app_state.overwrite_push(AppState::Control).unwrap();
+
+      // Pause time
+      physics_engine.pause();
+      {
+          // ai_gym_state is behind arc mutex, so we need to lock it
+          let mut ai_gym_state = ai_gym_state.lock().unwrap();
+
+          // This will tell bevy_rl that environeent is ready to receive actions
+          let results = (0..ai_gym_settings.num_agents).map(|_| true).collect();
+          ai_gym_state.send_step_result(results);
+
+          // Collect data to build environment state
+          // and send it to bevy_rl to be consumable with REST API
+          let env_state = State {
+              ...
+          };
+          ai_gym_state.set_env_state(env_state);
+      }
+  }
+}
+```
+
+#### `process_reset_request` handles environment reset request.
+
+```rust
+pub(crate) fn process_reset_request(
+    mut app_state: ResMut<State<AppState>>,
+    ai_gym_state: ResMut<AIGymState<Actions, State>>,
+) {
+    let ai_gym_state = ai_gym_state.lock().unwrap();
+    if !ai_gym_state.is_reset_request() {
+        return;
+    }
+
+    ai_gym_state.receive_reset_request();
+    app_state.set(AppState::Reset).unwrap();
+}
+
+```
+
+#### `turnbased_text_control_system` parses agent actions and issues commands to agents in environment.
+
+```rust
+pub(crate) fn process_control_request(
+    ai_gym_state: ResMut<AIGymState<Actions, EnvironmentState>>,
+    mut app_state: ResMut<State<AppState>>,
+    mut physics_engine: ResMut<PhysicsEngine>,
+) {
+    let ai_gym_state = ai_gym_state.lock().unwrap();
+
+    // Drop the system if users hasn't sent request this frame
+    if !ai_gym_state.is_next_action() {
+        return;
+    }
+
+    let unparsed_actions = ai_gym_state.receive_action_strings();
+    for i in 0..unparsed_actions.len() {
+        if let Some(unparsed_action) = unparsed_actions[i].clone() {
+            // Parse action and pass it to the game logic
+            let action: Vec<...> = serde_json::from_str(&unparsed_action).unwrap();
+        }
+    }
+
+    physics_engine.resume();
+    app_state.pop().unwrap();
+}
+```
 
 ## 💻 AIGymState API
 
@@ -121,7 +230,7 @@ app.add_system_set(
 | `set_reward(agent_index: usize, score: f32)`       | Set reward for an agent                    |
 | `set_terminated(agent_index: usize, result: bool)` | Set termination status for an agent        |
 | `reset()`                                          | Reset bevy_rl state                        |
-| `set_env_state(state: B)`                          | Set current environment state              |
+| `set_env_state(state: State)`                      | Set current environment state              |
 
 ## 🌐 REST API
 
@@ -134,4 +243,5 @@ app.add_system_set(
 
 ## ✍️ Examples
 
-[bevy_rl_shooter](https://github.com/stillonearth/bevy_rl_shooter) — example FPS project
+- [bevy_rl_shooter](https://github.com/stillonearth/bevy_rl_shooter) — example FPS project
+- [bevy_quadruped_neural_control](https://github.com/stillonearth/bevy_quadruped_neural_control) — quadruped locomotion with bevy_mujoco and bevy_rl
