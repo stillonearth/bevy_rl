@@ -1,7 +1,6 @@
 # 🏋️‍♀️ bevy_rl
 
 ![image](https://github.com/stillonearth/bevy_rl/blob/main/img/dog.gif?raw=true)
-<img height="250" alt="image" src="https://user-images.githubusercontent.com/97428129/205483185-765caedc-b7fd-45ac-9bed-9d17cabe651c.png">
 ![image](https://github.com/stillonearth/bevy_rl/blob/main/img/shooter.gif?raw=true)
 
 
