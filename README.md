@@ -2,6 +2,9 @@
 
 🏗️ Build 🤔 Reinforcement Learning 🏋🏿‍♂️ [Gym](https://gym.openai.com/) environments with 🕊 [Bevy](https://bevyengine.org/) engine to train 👾 AI agents that 💡 can learn from 📺 screen pixels or defined obeservation state.
 
+![image](https://github.com/stillonearth/bevy_rl/blob/main/img/dog.gif?raw=true)
+![image](https://github.com/stillonearth/bevy_rl/blob/main/img/shooter.gif?raw=true)
+
 ## Compatibility
 
 | bevy version | bevy_rl version |
