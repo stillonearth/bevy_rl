@@ -36,7 +36,7 @@
 
 ### 1. Define App States
 
-Environment needs to have multiple state, where different system are executed. Typicall you will need to implement InGame, Control and Reset state.
+Environment needs to have multiple states, where different system are executed. Typically you will need to implement `InGame`, `Control` and `Reset` states.
 
 ```rust
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
@@ -49,7 +49,7 @@ enum AppState {
 
 ### 2. Define Action Space and Observation Space
 
-Define action and observation spaces. Observation space needs to be Serializable because it's exported via REST API. Action space can be discreet or continuous.
+Observation space needs to be `Serializable` because it's exported via REST API.
 
 ```rust
 // Action space
@@ -67,7 +67,7 @@ pub struct State {
 
 ### 3. Enable AI Gym Plugin
 
-Width and hight should exceed 256, otherwise wgpu will panic.
+Width and height should exceed 256, otherwise wgpu will panic.
 
 ```rust
 let gym_settings = AIGymSettings {
