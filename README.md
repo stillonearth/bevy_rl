@@ -3,7 +3,6 @@
 ![image](https://github.com/stillonearth/bevy_rl/blob/main/img/dog.gif?raw=true)
 ![image](https://github.com/stillonearth/bevy_rl/blob/main/img/shooter.gif?raw=true)
 
-
 🏗️ Build 🤔 Reinforcement Learning 🏋🏿‍♂️ [Gym](https://gym.openai.com/) environments with 🕊 [Bevy](https://bevyengine.org/) engine to train 👾 AI agents that 💡 can learn from 📺 screen pixels or defined obeservation state.
 
 ## Compatibility
@@ -12,7 +11,7 @@
 | ------------ | :-------------: |
 | 0.7          |      0.0.5      |
 | 0.8          |      0.8.4      |
-| 0.9          |      0.9.4      |
+| 0.9          |      0.9.5      |
 
 ## 📝Features
 
@@ -31,6 +30,8 @@
   - Fixed a bug when `AIGymState` could not be initialized outside of the crate
 - 0.9.4
   - Option to use crate without camera rendering to buffer
+- 0.9.5
+  - Fixed a regression introduces in 0.8.4
 
 ## 👩‍💻 Usage
 
