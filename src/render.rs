@@ -42,7 +42,7 @@ impl<
 {
     fn build(&self, app: &mut App) {
         let ai_gym_settings = app.world.get_resource::<AIGymSettings>().unwrap().clone();
-        if ai_gym_settings.no_graphics {
+        if !ai_gym_settings.render_to_buffer {
             return;
         }
 
@@ -216,7 +216,7 @@ fn setup<
 
     let ai_gym_settings = ai_gym_settings.clone();
     let num_agents = ai_gym_settings.num_agents;
-    let no_graphics = !ai_gym_settings.no_graphics;
+    let ignore_graphics = !ai_gym_settings.render_to_buffer;
 
     thread::spawn(move || {
         gotham::start(
@@ -228,7 +228,7 @@ fn setup<
         )
     });
 
-    if no_graphics {
+    if ignore_graphics {
         return;
     }
 
