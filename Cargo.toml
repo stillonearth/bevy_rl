@@ -1,7 +1,7 @@
 [package]
 edition = "2021"
 name = "bevy_rl"
-version = "0.9.5"
+version = "0.9.6"
 license = "MIT OR Apache-2.0"
 description = "Build environments for reinforcement learning with bevy"
 keywords = ["ai", "bevy", "gym", "rl"]

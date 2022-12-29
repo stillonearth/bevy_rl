@@ -41,12 +41,12 @@ impl<
     > Plugin for AIGymPlugin<T, P>
 {
     fn build(&self, app: &mut App) {
+        app.add_startup_system(setup::<T, P>.label("setup_rendering"));
+
         let ai_gym_settings = app.world.get_resource::<AIGymSettings>().unwrap().clone();
         if !ai_gym_settings.render_to_buffer {
             return;
         }
-
-        app.add_startup_system(setup::<T, P>.label("setup_rendering"));
 
         let ai_gym_state = app
             .world
@@ -218,6 +218,7 @@ fn setup<
     let num_agents = ai_gym_settings.num_agents;
     let ignore_graphics = !ai_gym_settings.render_to_buffer;
 
+    println!("num_agents: {}", num_agents);
     thread::spawn(move || {
         gotham::start(
             "127.0.0.1:7878",

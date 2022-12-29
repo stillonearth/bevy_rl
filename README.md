@@ -11,7 +11,7 @@
 | ------------ | :-------------: |
 | 0.7          |      0.0.5      |
 | 0.8          |      0.8.4      |
-| 0.9          |      0.9.5      |
+| 0.9          |      0.9.6      |
 
 ## 📝Features
 
@@ -30,7 +30,7 @@
   - Fixed a bug when `AIGymState` could not be initialized outside of the crate
 - 0.9.4
   - Option to use crate without camera rendering to buffer
-- 0.9.5
+- 0.9.5, 0.9.6
   - Fixed a regression introduces in 0.8.4
 
 ## 👩‍💻 Usage
