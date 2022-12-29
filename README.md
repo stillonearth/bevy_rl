@@ -31,7 +31,7 @@
 - 0.9.4
   - Option to use crate without camera rendering to buffer
 - 0.9.5, 0.9.6
-  - Fixed a regression introduces in 0.8.4
+  - Fixed a regression introduced in 0.8.4
 
 ## 👩‍💻 Usage
 
