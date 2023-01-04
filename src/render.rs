@@ -11,7 +11,6 @@ use bevy::{
             Extent3d, TextureDescriptor, TextureDimension, TextureFormat, TextureUsages,
         },
         renderer::{RenderDevice, RenderQueue},
-        RenderApp, RenderStage,
     },
 };
 
@@ -35,34 +34,6 @@ pub struct AIGymPlugin<
 #[derive(Component)]
 struct Interface;
 
-impl<
-        T: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe,
-        P: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe + serde::Serialize,
-    > Plugin for AIGymPlugin<T, P>
-{
-    fn build(&self, app: &mut App) {
-        app.add_startup_system(setup::<T, P>.label("setup_rendering"));
-
-        let ai_gym_state = app
-            .world
-            .get_resource::<state::AIGymState<T, P>>()
-            .unwrap()
-            .clone();
-
-        {
-            let ai_gym_state = ai_gym_state.lock().unwrap();
-            if !ai_gym_state.settings.render_to_buffer {
-                return;
-            }
-        }
-
-        if let Ok(render_app) = app.get_sub_app_mut(RenderApp) {
-            render_app.add_system_to_stage(RenderStage::Render, copy_from_gpu_to_ram::<T, P>);
-            render_app.insert_resource(ai_gym_state);
-        }
-    }
-}
-
 // ------------------
 // Rendering to Image
 // ------------------
@@ -85,7 +56,7 @@ fn texture_image_layout(desc: &TextureDescriptor<'_>) -> ImageDataLayout {
     }
 }
 
-fn copy_from_gpu_to_ram<
+pub(crate) fn copy_from_gpu_to_ram<
     T: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe,
     P: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe + serde::Serialize,
 >(
@@ -111,8 +82,8 @@ fn copy_from_gpu_to_ram<
         .enumerate()
     {
         let render_gpu_image = gpu_images.get(gp).unwrap();
-        let texture_width = size.width as u32;
-        let texture_height = size.height as u32;
+        let texture_width = size.width;
+        let texture_height = size.height;
 
         let destination = device.create_buffer(&wgpu::BufferDescriptor {
             label: None,
@@ -166,7 +137,7 @@ fn copy_from_gpu_to_ram<
 
         drop(data);
         let mut rgba_image: image::RgbaImage =
-            image::ImageBuffer::from_raw(texture_width, texture_height as u32, result.clone())
+            image::ImageBuffer::from_raw(texture_width, texture_height, result.clone())
                 .unwrap();
 
         // fixing bgra to rgba
@@ -194,7 +165,7 @@ fn convert_bgra_to_rgba(image: &mut image::RgbaImage) {
     }
 }
 
-fn setup<
+pub(crate) fn setup_render_app<
     T: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe,
     P: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe + serde::Serialize,
 >(
