@@ -30,6 +30,9 @@ pub struct AIGymStateInner<
 
     pub(crate) _environment_state: Option<B>,
 
+    // Settings
+    pub settings: AIGymSettings,
+
     // State
     pub visual_observations: Vec<image::RgbaImage>,
     pub rewards: Vec<f32>,
@@ -69,6 +72,9 @@ impl<
             rewards: vec![0.0; settings.num_agents as usize],
             actions: vec![None; settings.num_agents as usize],
             terminations: vec![false; settings.num_agents as usize],
+
+            // Other
+            settings,
         }
     }
 

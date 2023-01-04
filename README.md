@@ -11,27 +11,13 @@
 | ------------ | :-------------: |
 | 0.7          |      0.0.5      |
 | 0.8          |      0.8.4      |
-| 0.9          |      0.9.6      |
+| 0.9          |      0.9.7      |
 
 ## 📝Features
 
 - Set of APIs to implement OpenAI Gym interface
 - REST API to control an agent
 - Rendering to RAM membuffer
-
-## 📋 Changelog
-
-- 0.8.4
-  - Added object representation of observation space
-- 0.9.1
-  - Bevy v.0.9 support
-  - Minor changes in `Deref` ergonomics
-- 0.9.3
-  - Fixed a bug when `AIGymState` could not be initialized outside of the crate
-- 0.9.4
-  - Option to use crate without camera rendering to buffer
-- 0.9.5, 0.9.6
-  - Fixed a regression introduces in 0.8.4
 
 ## 👩‍💻 Usage
 
@@ -79,8 +65,7 @@ let gym_settings = AIGymSettings {
 };
 
 app
-    .insert_resource(gym_settings.clone())
-    .insert_resource(Arc::new(Mutex::new(AIGymState::<Actions,State>::new(gym_settings.clone()))))
+    .insert_resource(AIGymState::<Actions,State>::new(gym_settings))
     .add_plugin(AIGymPlugin::<Actions, State>::default())
 ```
 
@@ -88,10 +73,10 @@ app
 
 ```rust
 pub(crate) fn spawn_cameras(
-    ai_gym_settings: Res<AIGymSettings>,
     ai_gym_state: Res<AIGymState<Actions, State>>,
 ) {
     let mut ai_gym_state = ai_gym_state.lock().unwrap();
+    let ai_gym_settings = ai_gym_state.settings.clone();
     for i in 0..ai_gym_settings.num_agents {
         let render_image_handle = ai_gym_state.render_image_handles[i as usize].clone();
         let render_target = RenderTarget::Image(render_image_handle);
@@ -146,9 +131,10 @@ pub(crate) fn control_switch(
     time: Res<Time>,
     mut timer: ResMut<DelayedControlTimer>,
     ai_gym_state: ResMut<AIGymState<Actions, State>>,
-    ai_gym_settings: Res<AIGymSettings>,
     mut physics_engine: ResMut<PhysicsEngine>,
 ) {
+
+  let app_state = ai_gym_state.lock().unwrap().settings.clone();
   // This controls control frequency of the environment
   if timer.0.tick(time.delta()).just_finished() {
 

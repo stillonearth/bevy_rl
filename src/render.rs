@@ -43,21 +43,22 @@ impl<
     fn build(&self, app: &mut App) {
         app.add_startup_system(setup::<T, P>.label("setup_rendering"));
 
-        let ai_gym_settings = app.world.get_resource::<AIGymSettings>().unwrap().clone();
-        if !ai_gym_settings.render_to_buffer {
-            return;
-        }
-
         let ai_gym_state = app
             .world
             .get_resource::<state::AIGymState<T, P>>()
             .unwrap()
             .clone();
 
+        {
+            let ai_gym_state = ai_gym_state.lock().unwrap();
+            if !ai_gym_state.settings.render_to_buffer {
+                return;
+            }
+        }
+
         if let Ok(render_app) = app.get_sub_app_mut(RenderApp) {
             render_app.add_system_to_stage(RenderStage::Render, copy_from_gpu_to_ram::<T, P>);
             render_app.insert_resource(ai_gym_state);
-            render_app.insert_resource(ai_gym_settings);
         }
     }
 }
@@ -200,25 +201,23 @@ fn setup<
     mut commands: Commands,
     mut images: ResMut<Assets<Image>>,
     ai_gym_state: ResMut<state::AIGymState<T, P>>,
-    ai_gym_settings: Res<AIGymSettings>,
     mut windows: ResMut<Windows>,
 ) {
+    let ai_gym_state_1 = ai_gym_state.into_inner().clone();
+    let ai_gym_state_2 = ai_gym_state_1.clone();
+
+    let mut ai_gym_state = ai_gym_state_1.lock().unwrap();
+    let ai_gym_settings = ai_gym_state.settings.clone();
+
+    let num_agents = ai_gym_settings.num_agents;
+    let ignore_graphics = !ai_gym_settings.render_to_buffer;
+
     let size = Extent3d {
         width: ai_gym_settings.width,
         height: ai_gym_settings.height,
         ..default()
     };
 
-    let ai_gym_state_1 = ai_gym_state.into_inner().clone();
-    let ai_gym_state_2 = ai_gym_state_1.clone();
-
-    let mut ai_gym_state = ai_gym_state_1.lock().unwrap();
-
-    let ai_gym_settings = ai_gym_settings.clone();
-    let num_agents = ai_gym_settings.num_agents;
-    let ignore_graphics = !ai_gym_settings.render_to_buffer;
-
-    println!("num_agents: {}", num_agents);
     thread::spawn(move || {
         gotham::start(
             "127.0.0.1:7878",
