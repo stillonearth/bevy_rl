@@ -133,8 +133,7 @@ pub(crate) fn control_switch(
     ai_gym_state: ResMut<AIGymState<Actions, State>>,
     mut physics_engine: ResMut<PhysicsEngine>,
 ) {
-
-  let app_state = ai_gym_state.lock().unwrap().settings.clone();
+  let ai_gym_state = app_state.lock().unwrap().settings.clone();
   // This controls control frequency of the environment
   if timer.0.tick(time.delta()).just_finished() {
 
