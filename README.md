@@ -33,7 +33,7 @@ pub struct Actions {
 
 // Observation space
 #[derive(Default, Serialize, Clone)]
-pub struct State {
+pub struct EnvironmentState {
 }
 ```
 
@@ -52,7 +52,7 @@ let ai_gym_state = AIGymState::<Actions, State>::new(AIGymSettings {
     ..default()
 });
 app.insert_resource(ai_gym_state)
-    .add_plugin(AIGymPlugin::<Actions, State>::default());
+    .add_plugin(AIGymPlugin::<Actions, EnvironmentState>::default());
 ```
 
 ### 2.1 (Optional) Enable Rendering to Buffer
@@ -61,7 +61,7 @@ If your environment exports raw pixels, you will need to attach a render target 
 
 ```rust
 pub(crate) fn spawn_cameras(
-    ai_gym_state: Res<AIGymState<Actions, State>>,
+    ai_gym_state: Res<AIGymState<Actions, EnvironmentState>>,
 ) {
     let mut ai_gym_state = ai_gym_state.lock().unwrap();
     let ai_gym_settings = ai_gym_state.settings.clone();
@@ -123,18 +123,45 @@ fn bevy_rl_control_request(
         }
         // Resume simulation (physics engine)
         // ...
-        // Switch to SimulationState::Running state of bevy_rl
-        simulation_state.set(SimulationState::Running);
+        // Return to running state; note that it uses pop/push to avoid
+        // entering `SystemSet::on_enter(SimulationState::Running)` which initialized game world anew
+        simulation_state.pop().unwrap();
     }
+}
+
+/// Handle bevy_rl::EventReset
+pub(crate) fn bevy_rl_reset_request(
+    mut reset_event_reader: EventReader<EventReset>,
+    mut commands: Commands,
+    mut walls: Query<Entity, &Wall>,
+    mut players: Query<(Entity, &Actor)>,
+    mut simulation_state: ResMut<State<SimulationState>>,
+    ai_gym_state: Res<AIGymState<Actions, EnvironmentState>>,
+) {
+    if reset_event_reader.iter().count() == 0 {
+        return;
+    }
+
+    // Reset envrionment state here
+
+    // Return simulation in Running state
+    simulation_state.set(SimulationState::Running).unwrap();
+
+    // tell bevy_rl that environment is reset and return response to REST API
+    let ai_gym_state = ai_gym_state.lock().unwrap();
+    ai_gym_state.send_reset_result(true);
 }
 ```
 
 Register systems to handle bevy_rl events.
 
 ```rust
-// bevy_rl events
-app.add_system(bevy_rl_pause_request);
-app.add_system(bevy_rl_control_request);
+app.add_system_set(
+    SystemSet::on_update(SimulationState::PausedForControl)
+        .with_system(bevy_rl_control_request)
+        .with_system(bevy_rl_reset_request)
+        .with_system(bevy_rl_pause_request),
+);
 ```
 
 ## 💻 AIGymState API
@@ -145,6 +172,7 @@ app.add_system(bevy_rl_control_request);
 | `set_terminated(agent_index: usize, result: bool)` | Set termination status for an agent |
 | `reset()`                                          | Reset bevy_rl state                 |
 | `set_env_state(state: State)`                      | Set current environment state       |
+| `send_reset_result(result: bool)`                  | Send reset result to REST API       |
 
 ## 🌐 REST API
 
