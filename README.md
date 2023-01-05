@@ -39,11 +39,13 @@ Observation space needs to be `Serializable` for REST API to work.
 // Action space
 #[derive(Default)]
 pub struct Actions {
+    // actuator_signals: [f32; 3],
 }
 
 // Observation space
 #[derive(Default, Serialize, Clone)]
 pub struct EnvironmentState {
+    // agent_coords: [(f32, f32); 16],
 }
 ```
 
@@ -67,7 +69,7 @@ app.insert_resource(ai_gym_state)
 
 ### 2.1 (Optional) Enable Rendering to Buffer
 
-If your environment exports raw pixels, you will need to attach a render target to each camera you want to export pixels from.
+If your environment wants to export raw pixels, you will need to attach a render target to each camera you want to export them from. Render targets are copied each frame from GPU memory to RAM buffers so that they can be accessed with REST API.
 
 ```rust
 pub(crate) fn spawn_cameras(
