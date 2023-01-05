@@ -1,8 +1,10 @@
 #![feature(associated_type_bounds)]
 
+use std::{marker::PhantomData, thread};
+
 use bevy::{
     prelude::*,
-    render::{RenderApp, RenderStage},
+    render::{view::RenderLayers, RenderApp, RenderStage},
     time::{Timer, TimerMode},
 };
 
@@ -10,10 +12,9 @@ mod api;
 pub mod render;
 pub mod state;
 
-pub use render::*;
+use render::copy_from_gpu_to_ram;
 pub use state::*;
-
-pub type Callback = fn();
+use wgpu::{Extent3d, TextureDescriptor, TextureDimension, TextureFormat, TextureUsages};
 
 #[derive(Clone, Resource, Default)]
 pub struct AIGymSettings {
@@ -41,13 +42,19 @@ pub enum SimulationState {
 #[derive(Resource)]
 pub struct SimulationPauseTimer(Timer);
 
+#[derive(Default, Clone)]
+pub struct AIGymPlugin<
+    T: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe,
+    P: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe + serde::Serialize,
+>(pub PhantomData<(T, P)>);
+
 impl<
         T: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe,
         P: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe + serde::Serialize,
     > Plugin for AIGymPlugin<T, P>
 {
     fn build(&self, app: &mut App) {
-        app.add_startup_system(setup_render_app::<T, P>.label("setup_rendering"));
+        app.add_startup_system(setup::<T, P>.label("bevy_rl_setup_rendering"));
 
         let ai_gym_state = app
             .world
@@ -57,15 +64,19 @@ impl<
 
         {
             let ai_gym_state = ai_gym_state.lock().unwrap();
-            if !ai_gym_state.settings.render_to_buffer {
-                return;
-            }
-
             app.insert_resource(SimulationPauseTimer(Timer::from_seconds(
                 ai_gym_state.settings.pause_interval,
                 TimerMode::Repeating,
             )));
         }
+
+        // Initial state
+        app.add_state(SimulationState::Running);
+
+        // Register events
+        app.add_event::<EventReset>();
+        app.add_event::<EventControl>();
+        app.add_event::<EventPauseResume>();
 
         // Add system scheduling
         app.add_system_set(
@@ -86,12 +97,110 @@ impl<
     }
 }
 
-// Pausing the external world i neach tick
+pub(crate) fn setup<
+    T: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe,
+    P: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe + serde::Serialize,
+>(
+    mut commands: Commands,
+    mut images: ResMut<Assets<Image>>,
+    ai_gym_state: ResMut<state::AIGymState<T, P>>,
+    mut windows: ResMut<Windows>,
+) {
+    let ai_gym_state_locked = ai_gym_state.into_inner().clone();
+    let mut ai_gym_state = ai_gym_state_locked.lock().unwrap();
+    let ai_gym_settings = ai_gym_state.settings.clone();
+
+    let handler = api::router::<T, P>(api::GothamState {
+        inner: ai_gym_state_locked.clone(),
+        settings: ai_gym_settings.clone(),
+    });
+
+    thread::spawn(move || gotham::start("127.0.0.1:7878", handler));
+
+    if !ai_gym_settings.render_to_buffer {
+        return;
+    }
+
+    let size = Extent3d {
+        width: ai_gym_settings.width,
+        height: ai_gym_settings.height,
+        ..default()
+    };
+
+    for _ in 0..ai_gym_settings.num_agents {
+        // This is the texture that will be rendered to.
+        let mut render_image = Image {
+            texture_descriptor: TextureDescriptor {
+                label: None,
+                size,
+                dimension: TextureDimension::D2,
+                format: TextureFormat::Bgra8UnormSrgb,
+                mip_level_count: 1,
+                sample_count: 1,
+                usage: TextureUsages::COPY_SRC
+                    | TextureUsages::COPY_DST
+                    | TextureUsages::TEXTURE_BINDING
+                    | TextureUsages::RENDER_ATTACHMENT,
+            },
+            ..default()
+        };
+        render_image.resize(size);
+        ai_gym_state
+            .render_image_handles
+            .push(images.add(render_image));
+    }
+
+    let second_pass_layer = RenderLayers::layer(1);
+
+    commands
+        .spawn(Camera2dBundle::default())
+        .insert(second_pass_layer);
+
+    // Show all camera views in tiled mode
+    let window = windows.get_primary_mut().unwrap();
+    let number_of_columns = (ai_gym_settings.num_agents as f32).sqrt().ceil() as u32;
+    let number_of_rows =
+        ((ai_gym_settings.num_agents as f32) / (number_of_columns as f32)).ceil() as u32;
+    let mut frames: Vec<Handle<Image>> = Vec::new();
+    for f in ai_gym_state.render_image_handles.iter() {
+        frames.push(f.clone());
+    }
+    let offset_x = (size.width * number_of_rows / 2 - size.width / 2) as f32;
+    let offset_y = (size.height * number_of_columns / 2 - size.height / 2) as f32;
+
+    for r in 0..number_of_rows {
+        for c in 0..number_of_columns {
+            let y = (r * size.height) as f32;
+            let x = (c * size.width) as f32;
+
+            let i = (c * number_of_columns + r) as usize;
+            if i > (frames.len() - 1) {
+                continue;
+            }
+
+            commands
+                .spawn(SpriteBundle {
+                    texture: frames[i].clone(),
+                    transform: Transform::from_xyz(x - offset_x, y - offset_y, 0.0),
+                    ..default()
+                })
+                .insert(second_pass_layer);
+        }
+    }
+
+    window.set_resolution(
+        (size.width * number_of_rows) as f32,
+        (size.height * number_of_columns) as f32,
+    );
+    window.set_resizable(false);
+}
+
+// Pausing the external world each tick
 fn control_switch<
     T: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe,
     P: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe + serde::Serialize,
 >(
-    mut app_state: ResMut<State<SimulationState>>,
+    mut simulation_state: ResMut<State<SimulationState>>,
     time: Res<Time>,
     mut timer: ResMut<SimulationPauseTimer>,
     ai_gym_state: ResMut<state::AIGymState<T, P>>,
@@ -101,7 +210,7 @@ fn control_switch<
     // This controls control frequency of the environment
     if timer.0.tick(time.delta()).just_finished() {
         // Set current state to control to disable simulation systems
-        app_state
+        simulation_state
             .overwrite_push(SimulationState::PausedForControl)
             .unwrap();
 
@@ -123,6 +232,7 @@ pub(crate) fn process_reset_request<
 >(
     ai_gym_state: ResMut<state::AIGymState<T, P>>,
     mut reset_event_writer: EventWriter<EventReset>,
+    // mut simulation_state: ResMut<State<SimulationState>>,
 ) {
     let ai_gym_state = ai_gym_state.lock().unwrap();
     if !ai_gym_state.is_reset_request() {
@@ -137,7 +247,6 @@ pub(crate) fn process_control_request<
     T: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe,
     P: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe + serde::Serialize,
 >(
-    mut app_state: ResMut<State<SimulationState>>,
     ai_gym_state: ResMut<state::AIGymState<T, P>>,
     mut reset_event_writer: EventWriter<EventControl>,
 ) {
@@ -150,6 +259,4 @@ pub(crate) fn process_control_request<
 
     let unparsed_actions = ai_gym_state.receive_action_strings();
     reset_event_writer.send(EventControl(unparsed_actions));
-
-    app_state.pop().unwrap();
 }

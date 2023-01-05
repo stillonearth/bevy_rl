@@ -7,6 +7,17 @@ use crossbeam_channel::*;
 
 use crate::AIGymSettings;
 
+/// `AIGymStateInner` handles synchronization between the engine thread and the API thread
+/// via set of channels. The engine thread will send messages to the API thread and wait for a response.
+///
+/// (StepRequest, ResetRequest, StepResult, ResetResult) — these are the messages.  Requests are sent
+/// from API to the engine. Results are sent from engine to the API once the request is processed.
+///
+/// Other fields are used to store the state of the environment,
+/// plugin settings and gym data tuple (S,A,R,T)
+///
+/// `AIGymStateInner` is never used directly, instead it's wrapped in `Arc<Mutex<AIGymStateInner>>`
+/// and used as resource in bevy systems and parallel-running REST API thread
 #[derive(Resource)]
 pub struct AIGymStateInner<
     A: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe,
@@ -16,19 +27,19 @@ pub struct AIGymStateInner<
     pub render_image_handles: Vec<Handle<Image>>,
 
     // Sync with engine thread.
-    pub(crate) _step_tx: Sender<Vec<Option<String>>>,
-    pub(crate) _step_rx: Receiver<Vec<Option<String>>>,
+    pub(crate) step_request_tx: Sender<Vec<Option<String>>>,
+    pub(crate) step_request_rx: Receiver<Vec<Option<String>>>,
 
-    pub(crate) _reset_tx: Sender<bool>,
-    pub(crate) _reset_rx: Receiver<bool>,
+    pub(crate) reset_request_tx: Sender<bool>,
+    pub(crate) reset_request_rx: Receiver<bool>,
 
-    pub(crate) _step_result_tx: Sender<Vec<bool>>,
-    pub(crate) _step_result_rx: Receiver<Vec<bool>>,
+    pub(crate) step_result_tx: Sender<Vec<bool>>,
+    pub(crate) step_result_rx: Receiver<Vec<bool>>,
 
-    pub(crate) _reset_result_tx: Sender<bool>,
-    pub(crate) _reset_result_rx: Receiver<bool>,
+    pub(crate) reset_result_tx: Sender<bool>,
+    pub(crate) reset_result_rx: Receiver<bool>,
 
-    pub(crate) _environment_state: Option<B>,
+    pub(crate) environment_state: Option<B>,
 
     // Settings
     pub settings: AIGymSettings,
@@ -52,17 +63,17 @@ impl<
         let (result_reset_tx, result_reset_rx) = bounded(1);
         Self {
             // Channels
-            _step_tx: step_tx,
-            _step_rx: step_rx,
-            _step_result_tx: result_tx,
-            _step_result_rx: result_rx,
+            step_request_tx: step_tx,
+            step_request_rx: step_rx,
+            step_result_tx: result_tx,
+            step_result_rx: result_rx,
 
-            _reset_tx: reset_tx,
-            _reset_rx: reset_rx,
-            _reset_result_tx: result_reset_tx,
-            _reset_result_rx: result_reset_rx,
+            reset_request_tx: reset_tx,
+            reset_request_rx: reset_rx,
+            reset_result_tx: result_reset_tx,
+            reset_result_rx: result_reset_rx,
 
-            _environment_state: None,
+            environment_state: None,
 
             // Render Targets
             render_image_handles: Vec::new(),
@@ -78,33 +89,37 @@ impl<
         }
     }
 
+    // Syncronization happens by sending messages to result-response channels
+
     pub fn send_step_result(&self, results: Vec<bool>) {
-        if self._step_result_tx.is_empty() {
-            self._step_result_tx.send(results).unwrap();
+        if self.step_result_tx.is_empty() {
+            self.step_result_tx.send(results).unwrap();
         }
     }
 
     pub fn send_reset_result(&self, result: bool) {
-        if self._reset_result_tx.is_empty() {
-            self._reset_result_tx.send(result).unwrap();
+        if self.reset_result_tx.is_empty() {
+            self.reset_result_tx.send(result).unwrap();
         }
     }
 
     pub fn receive_action_strings(&self) -> Vec<Option<String>> {
-        self._step_rx.recv().unwrap()
+        self.step_request_rx.recv().unwrap()
     }
 
     pub fn receive_reset_request(&self) {
-        self._reset_rx.recv().unwrap();
+        self.reset_request_rx.recv().unwrap();
     }
 
     pub fn is_next_action(&self) -> bool {
-        !self._step_rx.is_empty()
+        !self.step_request_rx.is_empty()
     }
 
     pub fn is_reset_request(&self) -> bool {
-        !self._reset_rx.is_empty()
+        !self.reset_request_rx.is_empty()
     }
+
+    // RL (S,A,R,T) state management
 
     pub fn set_reward(&mut self, agent_index: usize, score: f32) {
         self.rewards[agent_index] = score;
@@ -124,10 +139,12 @@ impl<
     }
 
     pub fn set_env_state(&mut self, state: B) {
-        self._environment_state = Some(state);
+        self.environment_state = Some(state);
     }
 }
 
+/// `AIGymStateInner` is never used directly, instead it's wrapped
+/// in `Arc<Mutex<AIGymStateInner>>` as `AIGymState` and used as resource in bevy systems
 #[derive(Resource, Deref, DerefMut, Clone)]
 pub struct AIGymState<
     A: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe,

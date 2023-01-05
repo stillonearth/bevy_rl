@@ -128,8 +128,8 @@ fn step<
 
     {
         let ai_gym_state = state_.inner.lock().unwrap();
-        step_tx = ai_gym_state._step_tx.clone();
-        result_rx = ai_gym_state._step_result_rx.clone();
+        step_tx = ai_gym_state.step_request_tx.clone();
+        result_rx = ai_gym_state.step_result_rx.clone();
     }
 
     let actions = agent_actions
@@ -165,8 +165,8 @@ fn reset<
     {
         let state_: &GothamState<T, P> = GothamState::borrow_from(&state);
         let ai_gym_state = state_.inner.lock().unwrap();
-        reset_channel_tx = ai_gym_state._reset_tx.clone();
-        reset_result_channel_rx = ai_gym_state._reset_result_rx.clone();
+        reset_channel_tx = ai_gym_state.reset_request_tx.clone();
+        reset_result_channel_rx = ai_gym_state.reset_result_rx.clone();
     }
 
     reset_channel_tx.send(true).unwrap();
@@ -194,7 +194,7 @@ fn env_state<
     state: State,
 ) -> (State, String) {
     let state_: &GothamState<T, P> = GothamState::borrow_from(&state);
-    let env_state = state_.inner.lock().unwrap()._environment_state.clone();
+    let env_state = state_.inner.lock().unwrap().environment_state.clone();
 
     (state, json!(env_state).to_string())
 }

@@ -1,8 +1,3 @@
-use std::marker::PhantomData;
-use std::num::NonZeroU32;
-use std::thread;
-
-use bevy::render::view::RenderLayers;
 use bevy::{
     prelude::*,
     render::{
@@ -13,30 +8,14 @@ use bevy::{
         renderer::{RenderDevice, RenderQueue},
     },
 };
+use std::num::NonZeroU32;
 
 use bytemuck;
 use image;
 use wgpu::ImageCopyBuffer;
 use wgpu::ImageDataLayout;
 
-use crate::{api, state, AIGymSettings};
-
-#[derive(Default, Clone)]
-pub struct AIGymPlugin<
-    T: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe,
-    P: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe + serde::Serialize,
->(pub PhantomData<(T, P)>);
-
-// ----------
-// Components
-// ----------
-
-#[derive(Component)]
-struct Interface;
-
-// ------------------
-// Rendering to Image
-// ------------------
+use crate::state;
 
 fn texture_image_layout(desc: &TextureDescriptor<'_>) -> ImageDataLayout {
     let size = desc.size;
@@ -56,6 +35,8 @@ fn texture_image_layout(desc: &TextureDescriptor<'_>) -> ImageDataLayout {
     }
 }
 
+/// Copy a texture buffer from GPU to RAM and convert color space to RGBA.
+/// It makes possible to export render results via API.
 pub(crate) fn copy_from_gpu_to_ram<
     T: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe,
     P: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe + serde::Serialize,
@@ -64,9 +45,13 @@ pub(crate) fn copy_from_gpu_to_ram<
     render_device: Res<RenderDevice>,
     render_queue: Res<RenderQueue>,
     ai_gym_state: Res<state::AIGymState<T, P>>,
-    ai_gym_settings: Res<AIGymSettings>,
 ) {
     let mut ai_gym_state_locked = ai_gym_state.lock().unwrap();
+    if !ai_gym_state_locked.settings.render_to_buffer {
+        return;
+    }
+    let ai_gym_settings = ai_gym_state_locked.settings.clone();
+
     let device = render_device.wgpu_device();
     let size = Extent3d {
         width: ai_gym_settings.width,
@@ -75,7 +60,7 @@ pub(crate) fn copy_from_gpu_to_ram<
     };
 
     ai_gym_state_locked.visual_observations = Vec::new();
-    for (_i, gp) in ai_gym_state_locked
+    for (_, gp) in ai_gym_state_locked
         .render_image_handles
         .clone()
         .iter()
@@ -137,8 +122,7 @@ pub(crate) fn copy_from_gpu_to_ram<
 
         drop(data);
         let mut rgba_image: image::RgbaImage =
-            image::ImageBuffer::from_raw(texture_width, texture_height, result.clone())
-                .unwrap();
+            image::ImageBuffer::from_raw(texture_width, texture_height, result.clone()).unwrap();
 
         // fixing bgra to rgba
         convert_bgra_to_rgba(&mut rgba_image);
@@ -151,137 +135,9 @@ pub(crate) fn copy_from_gpu_to_ram<
     }
 }
 
-// convert BRGA image to RGBA image
+/// convert BRGA image to RGBA image
 fn convert_bgra_to_rgba(image: &mut image::RgbaImage) {
     for pixel in image.pixels_mut() {
-        let b = pixel[0];
-        let g = pixel[1];
-        let r = pixel[2];
-        let a = pixel[3];
-        pixel[0] = r;
-        pixel[1] = g;
-        pixel[2] = b;
-        pixel[3] = a;
+        pixel.0.swap(0, 2);
     }
-}
-
-pub(crate) fn setup_render_app<
-    T: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe,
-    P: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe + serde::Serialize,
->(
-    mut commands: Commands,
-    mut images: ResMut<Assets<Image>>,
-    ai_gym_state: ResMut<state::AIGymState<T, P>>,
-    mut windows: ResMut<Windows>,
-) {
-    let ai_gym_state_1 = ai_gym_state.into_inner().clone();
-    let ai_gym_state_2 = ai_gym_state_1.clone();
-
-    let mut ai_gym_state = ai_gym_state_1.lock().unwrap();
-    let ai_gym_settings = ai_gym_state.settings.clone();
-
-    let num_agents = ai_gym_settings.num_agents;
-    let ignore_graphics = !ai_gym_settings.render_to_buffer;
-
-    let size = Extent3d {
-        width: ai_gym_settings.width,
-        height: ai_gym_settings.height,
-        ..default()
-    };
-
-    thread::spawn(move || {
-        gotham::start(
-            "127.0.0.1:7878",
-            api::router::<T, P>(api::GothamState {
-                inner: ai_gym_state_2,
-                settings: ai_gym_settings,
-            }),
-        )
-    });
-
-    if ignore_graphics {
-        return;
-    }
-
-    for _ in 0..num_agents {
-        // This is the texture that will be rendered to.
-        let mut render_image = Image {
-            texture_descriptor: TextureDescriptor {
-                label: None,
-                size,
-                dimension: TextureDimension::D2,
-                format: TextureFormat::Bgra8UnormSrgb,
-                mip_level_count: 1,
-                sample_count: 1,
-                usage: TextureUsages::COPY_SRC
-                    | TextureUsages::COPY_DST
-                    | TextureUsages::TEXTURE_BINDING
-                    | TextureUsages::RENDER_ATTACHMENT,
-            },
-            ..default()
-        };
-        render_image.resize(size);
-        ai_gym_state
-            .render_image_handles
-            .push(images.add(render_image));
-
-        let mut display_image = Image {
-            texture_descriptor: TextureDescriptor {
-                label: None,
-                size,
-                dimension: TextureDimension::D2,
-                format: TextureFormat::Rgba8UnormSrgb,
-                mip_level_count: 1,
-                sample_count: 1,
-                usage: TextureUsages::COPY_SRC
-                    | TextureUsages::COPY_DST
-                    | TextureUsages::TEXTURE_BINDING
-                    | TextureUsages::RENDER_ATTACHMENT,
-            },
-            ..default()
-        };
-        display_image.resize(size);
-    }
-
-    let second_pass_layer = RenderLayers::layer(1);
-
-    commands
-        .spawn(Camera2dBundle::default())
-        .insert(second_pass_layer);
-
-    let window = windows.get_primary_mut().unwrap();
-    let number_of_columns = (num_agents as f32).sqrt().ceil() as u32;
-    let number_of_rows = ((num_agents as f32) / (number_of_columns as f32)).ceil() as u32;
-    let mut frames: Vec<Handle<Image>> = Vec::new();
-    for f in ai_gym_state.render_image_handles.iter() {
-        frames.push(f.clone());
-    }
-    let offset_x = (size.width * number_of_rows / 2 - size.width / 2) as f32;
-    let offset_y = (size.height * number_of_columns / 2 - size.height / 2) as f32;
-
-    for r in 0..number_of_rows {
-        for c in 0..number_of_columns {
-            let y = (r * size.height) as f32;
-            let x = (c * size.width) as f32;
-
-            let i = (c * number_of_columns + r) as usize;
-            if i > (frames.len() - 1) {
-                continue;
-            }
-
-            commands
-                .spawn(SpriteBundle {
-                    texture: frames[i].clone(),
-                    transform: Transform::from_xyz(x - offset_x, y - offset_y, 0.0),
-                    ..default()
-                })
-                .insert(second_pass_layer);
-        }
-    }
-
-    window.set_resolution(
-        (size.width * number_of_rows) as f32,
-        (size.height * number_of_columns) as f32,
-    );
-    window.set_resizable(false);
 }
