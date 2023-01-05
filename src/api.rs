@@ -119,8 +119,8 @@ fn step<
     let agent_actions: Vec<AgentAction> = serde_json::from_str(&query_param.payload).unwrap();
 
     let state_: &GothamState<T, P> = GothamState::borrow_from(&state);
-    let step_tx: Sender<Vec<Option<String>>>;
-    let result_rx: Receiver<Vec<bool>>;
+    let step_request_tx: Sender<Vec<Option<String>>>;
+    let setp_result_rx: Receiver<Vec<bool>>;
 
     if agent_actions.len() != state_.settings.num_agents as usize {
         return (state, "Invalid number of actions".to_string());
@@ -128,8 +128,8 @@ fn step<
 
     {
         let ai_gym_state = state_.inner.lock().unwrap();
-        step_tx = ai_gym_state.step_request_tx.clone();
-        result_rx = ai_gym_state.step_result_rx.clone();
+        step_request_tx = ai_gym_state.step_request_tx.clone();
+        setp_result_rx = ai_gym_state.step_result_rx.clone();
     }
 
     let actions = agent_actions
@@ -137,8 +137,8 @@ fn step<
         .map(|agent_action| agent_action.action.clone())
         .collect();
 
-    step_tx.send(actions).unwrap();
-    result_rx.recv().unwrap();
+    step_request_tx.send(actions).unwrap();
+    setp_result_rx.recv().unwrap();
 
     let mut agent_states: Vec<AgentState> = Vec::new();
     {
@@ -160,16 +160,16 @@ fn reset<
 >(
     state: State,
 ) -> (State, String) {
-    let reset_channel_tx: Sender<bool>;
+    let reset_request_channel_tx: Sender<bool>;
     let reset_result_channel_rx: Receiver<bool>;
     {
         let state_: &GothamState<T, P> = GothamState::borrow_from(&state);
         let ai_gym_state = state_.inner.lock().unwrap();
-        reset_channel_tx = ai_gym_state.reset_request_tx.clone();
+        reset_request_channel_tx = ai_gym_state.reset_request_tx.clone();
         reset_result_channel_rx = ai_gym_state.reset_result_rx.clone();
     }
 
-    reset_channel_tx.send(true).unwrap();
+    reset_request_channel_tx.send(true).unwrap();
     reset_result_channel_rx.recv().unwrap();
 
     let state_: &GothamState<T, P> = GothamState::borrow_from(&state);

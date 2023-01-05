@@ -31,7 +31,7 @@ pub struct EventReset;
 
 pub struct EventControl(pub Vec<Option<String>>);
 
-pub struct EventPauseResume;
+pub struct EventPause;
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Resource)]
 pub enum SimulationState {
@@ -76,7 +76,7 @@ impl<
         // Register events
         app.add_event::<EventReset>();
         app.add_event::<EventControl>();
-        app.add_event::<EventPauseResume>();
+        app.add_event::<EventPause>();
 
         // Add system scheduling
         app.add_system_set(
@@ -204,7 +204,7 @@ fn control_switch<
     time: Res<Time>,
     mut timer: ResMut<SimulationPauseTimer>,
     ai_gym_state: ResMut<state::AIGymState<T, P>>,
-    mut pause_event_writer: EventWriter<EventPauseResume>,
+    mut pause_event_writer: EventWriter<EventPause>,
 ) {
     let ai_gym_settings = ai_gym_state.lock().unwrap().settings.clone();
     // This controls control frequency of the environment
@@ -215,7 +215,7 @@ fn control_switch<
             .unwrap();
 
         // Pause time in all environment
-        pause_event_writer.send(EventPauseResume);
+        pause_event_writer.send(EventPause);
 
         // ai_gym_state is behind arc mutex, so we need to lock it
         let ai_gym_state = ai_gym_state.lock().unwrap();
@@ -248,7 +248,7 @@ pub(crate) fn process_control_request<
     P: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe + serde::Serialize,
 >(
     ai_gym_state: ResMut<state::AIGymState<T, P>>,
-    mut reset_event_writer: EventWriter<EventControl>,
+    mut control_event_writer: EventWriter<EventControl>,
 ) {
     let ai_gym_state = ai_gym_state.lock().unwrap();
 
@@ -258,5 +258,5 @@ pub(crate) fn process_control_request<
     }
 
     let unparsed_actions = ai_gym_state.receive_action_strings();
-    reset_event_writer.send(EventControl(unparsed_actions));
+    control_event_writer.send(EventControl(unparsed_actions));
 }
