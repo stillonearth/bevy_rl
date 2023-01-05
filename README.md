@@ -3,6 +3,15 @@
 ![image](https://github.com/stillonearth/bevy_rl/blob/main/img/dog.gif?raw=true)
 ![image](https://github.com/stillonearth/bevy_rl/blob/main/img/shooter.gif?raw=true)
 
+##
+
+[![Crates.io](https://img.shields.io/crates/v/bevy_rl.svg)](https://crates.io/crates/bevy_rl)
+[![MIT/Apache 2.0](https://img.shields.io/badge/license-MIT%2FApache-blue.svg)](https://github.com/bevyengine/bevy#license)
+[![Crates.io](https://img.shields.io/crates/d/bevy_rl.svg)](https://crates.io/crates/bevy_rl)
+[![Rust](https://github.com/stillonearth/bevy_rl/workflows/CI/badge.svg)](https://github.com/stillonearth/bevy_rl/actions)
+
+## Reinforcement Learning for Bevy Engine
+
 🏗️ Build 🤔 Reinforcement Learning 🏋🏿‍♂️ [Gym](https://gym.openai.com/) environments with 🕊 [Bevy](https://bevyengine.org/) engine to train 👾 AI agents that 💡 can learn from 📺 screen pixels or defined obeservation state.
 
 ## Compatibility
@@ -15,9 +24,10 @@
 
 ## 📝Features
 
-- Set of APIs to implement OpenAI Gym interface
-- REST API to control an agent
-- Rendering to RAM membuffer
+- Set of APIs to implement OpenAI Gym interface, such as `reset`, `step`, `render`, `close` and associated simulator states
+- Multi-Agent support
+- Rendering screen pixels to RAM buffer — for training agents with raw pixels
+- REST API to control agents
 
 ## 👩‍💻 Usage
 
@@ -57,7 +67,7 @@ app.insert_resource(ai_gym_state)
 
 ### 2.1 (Optional) Enable Rendering to Buffer
 
-If your environment exports raw pixels, you will need to attach a render target to each camera of your agents.
+If your environment exports raw pixels, you will need to attach a render target to each camera you want to export pixels from.
 
 ```rust
 pub(crate) fn spawn_cameras(
@@ -84,11 +94,15 @@ pub(crate) fn spawn_cameras(
 
 ### 4. Handle bevy_rl events
 
-| Event              | Description                           |
-| ------------------ | ------------------------------------- |
-| `EventReset`       | Reset environment to initial state    |
-| `EventControl`     | Switch to control state               |
-| `EventPauseResume` | Pause or resume environment execution |
+`bevy_rl` will communicate with your environment through events. You can use `EventReader` to read events and respond to them. Those event are from REST API or from a timer that pauses the simulation with given interval (`AIGymSettings.pause_interval`).
+
+| Event          | Description                        | Usage                                                                                      |
+| -------------- | ---------------------------------- | ------------------------------------------------------------------------------------------ |
+| `EventReset`   | Reset environment to initial state | You should rebuild your evnironment here                                                   |
+| `EventControl` | Switch to control state            | You should recieve actions here and apply them to your environment (and resume simulation) |
+| `EventPause`   | Pause environment execution        | Pause physics engine or game clock and take snapshot of your game state                    |
+
+Here's example of how to handle those events:
 
 ```rust
 // EventPauseResume
@@ -166,15 +180,19 @@ app.add_system_set(
 
 ## 💻 AIGymState API
 
-| Method                                             | Description                         |
-| -------------------------------------------------- | ----------------------------------- |
-| `set_reward(agent_index: usize, score: f32)`       | Set reward for an agent             |
-| `set_terminated(agent_index: usize, result: bool)` | Set termination status for an agent |
-| `reset()`                                          | Reset bevy_rl state                 |
-| `set_env_state(state: State)`                      | Set current environment state       |
-| `send_reset_result(result: bool)`                  | Send reset result to REST API       |
+Those methods are available on `AIGymState` resource. You should use them to alter bevy_rl internal state.
+
+| Method                                             | Description                         | Usage                                                                                        |
+| -------------------------------------------------- | ----------------------------------- | -------------------------------------------------------------------------------------------- |
+| `set_reward(agent_index: usize, score: f32)`       | Set reward for an agent             | When a certain event happens, you can set reward for an agent.                               |
+| `set_terminated(agent_index: usize, result: bool)` | Set termination status for an agent | Once your agent is killed, you should set it's status to `true`. Useful for Multi-agent.     |
+| `reset()`                                          | Reset bevy_rl state                 | You should call this method when you reset your environment to clear exported state history  |
+| `set_env_state(state: State)`                      | Set current environment state       | When you serialize your environment state, you should set it here.                           |
+| `send_reset_result(result: bool)`                  | Send reset result to REST API       | You should call this method when you have reset your environment to sychronize with REST API |
 
 ## 🌐 REST API
+
+Accessing `bevy_rl`-enabled environment is possible through REST API. You can use any HTTP client to communicate with it. Here's a list of available endpoints:
 
 | Method            | Verb     | bevy_rl version                               |
 | ----------------- | -------- | --------------------------------------------- |
@@ -182,6 +200,8 @@ app.add_system_set(
 | State             | **GET**  | `http://localhost:7878/state`                 |
 | Reset Environment | **POST** | `http://localhost:7878/reset`                 |
 | Step              | **GET**  | `http://localhost:7878/step` `payload=ACTION` |
+
+One would wrap those endpoints into a client library (python) to make it easier to use.
 
 ## ✍️ Examples
 
