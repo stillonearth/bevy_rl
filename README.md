@@ -11,7 +11,7 @@
 
 ## Reinforcement Learning for Bevy Engine
 
-🏗️ Build 🤔 Reinforcement Learning 🏋🏿‍♂️ [Gym](https://gym.openai.com/) environments with 🕊 [Bevy](https://bevyengine.org/) engine to train 👾 AI agents that 💡 can learn from 📺 screen pixels or defined obeservation state.
+Build Reinforcement Learning [Gym](https://gym.openai.com/) environments with [Bevy](https://bevyengine.org/) engine to train AI agents that can learn from screen pixels or defined obeservation state.
 
 ## Compatibility
 
