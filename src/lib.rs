@@ -16,6 +16,7 @@ use render::copy_from_gpu_to_ram;
 pub use state::*;
 use wgpu::{Extent3d, TextureDescriptor, TextureDimension, TextureFormat, TextureUsages};
 
+/// Plugin Settings
 #[derive(Clone, Resource, Default)]
 pub struct AIGymSettings {
     pub width: u32,
@@ -27,21 +28,27 @@ pub struct AIGymSettings {
     pub render_to_buffer: bool,
 }
 
+/// This event is fired when user calls `reset` method of the REST API
 pub struct EventReset;
 
+/// This event is fired when user calls `step` method of the REST API
 pub struct EventControl(pub Vec<Option<String>>);
 
+/// This event is fired when an internal timer would need to pause the simulation
 pub struct EventPause;
 
+/// States of the simulation
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Resource)]
 pub enum SimulationState {
     Running,
     PausedForControl,
 }
 
+/// Timer to pause the simulation every `AIGymSettings.pause_interval` seconds
 #[derive(Resource)]
 pub struct SimulationPauseTimer(Timer);
 
+/// bevy_rl plugin
 #[derive(Default, Clone)]
 pub struct AIGymPlugin<
     T: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe,
@@ -97,6 +104,7 @@ impl<
     }
 }
 
+/// Setup rendering
 pub(crate) fn setup<
     T: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe,
     P: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe + serde::Serialize,
@@ -195,7 +203,7 @@ pub(crate) fn setup<
     window.set_resizable(false);
 }
 
-// Pausing the external world each tick
+/// Pausing the external world each tick
 fn control_switch<
     T: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe,
     P: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe + serde::Serialize,
@@ -226,6 +234,7 @@ fn control_switch<
     }
 }
 
+/// This is called when user calls reset() in the REST api
 pub(crate) fn process_reset_request<
     T: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe,
     P: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe + serde::Serialize,
@@ -243,6 +252,7 @@ pub(crate) fn process_reset_request<
     reset_event_writer.send(EventReset);
 }
 
+/// This is called when user calls step() in the REST api
 pub(crate) fn process_control_request<
     T: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe,
     P: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe + serde::Serialize,

@@ -91,44 +91,51 @@ impl<
 
     // Syncronization happens by sending messages to result-response channels
 
+    /// Once the simulation step is done, send the results back to the API thread
     pub fn send_step_result(&self, results: Vec<bool>) {
         if self.step_result_tx.is_empty() {
             self.step_result_tx.send(results).unwrap();
         }
     }
 
+    /// Once the simulation reset, send the results back to the API thread
     pub fn send_reset_result(&self, result: bool) {
         if self.reset_result_tx.is_empty() {
             self.reset_result_tx.send(result).unwrap();
         }
     }
 
+    /// Recieve serialized actions from the API thread
     pub fn receive_action_strings(&self) -> Vec<Option<String>> {
         self.step_request_rx.recv().unwrap()
     }
 
+    /// Recieve reset request from the API thread
     pub fn receive_reset_request(&self) {
         self.reset_request_rx.recv().unwrap();
     }
 
+    /// Check whether the API thread has sent a step request
     pub fn is_next_action(&self) -> bool {
         !self.step_request_rx.is_empty()
     }
 
+    /// Check whether the API thread has sent a reset request
     pub fn is_reset_request(&self) -> bool {
         !self.reset_request_rx.is_empty()
     }
 
-    // RL (S,A,R,T) state management
-
+    /// set_reward is used to set the reward for the agent
     pub fn set_reward(&mut self, agent_index: usize, score: f32) {
         self.rewards[agent_index] = score;
     }
 
+    /// set_terminated is used to mark the agent as terminated
     pub fn set_terminated(&mut self, agent_index: usize, result: bool) {
         self.terminations[agent_index] = result;
     }
 
+    /// reset `bevy_rl` state history (terminated statuses and reward for agents)
     pub fn reset(&mut self) {
         for i in 0..self.terminations.len() {
             self.set_terminated(i, false);
@@ -138,6 +145,7 @@ impl<
         self.send_reset_result(true);
     }
 
+    /// set_env_state is used to synchrinize simulation state with bevy_rl for REST API
     pub fn set_env_state(&mut self, state: B) {
         self.environment_state = Some(state);
     }
@@ -145,6 +153,7 @@ impl<
 
 /// `AIGymStateInner` is never used directly, instead it's wrapped
 /// in `Arc<Mutex<AIGymStateInner>>` as `AIGymState` and used as resource in bevy systems
+/// To use AIGymState you would need to lock it with `AIGymState::lock()`
 #[derive(Resource, Deref, DerefMut, Clone)]
 pub struct AIGymState<
     A: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe,

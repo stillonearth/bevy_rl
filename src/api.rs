@@ -1,3 +1,14 @@
+//! REST API for bevy_rl
+//! This module uses gotham web framework to expose REST API for bevy_rl
+//! One catch choosing a web framework for Rust here is that it should run without an async runtime
+//! and be able to run in a separate thread. Gotham is one of the few web frameworks that can do
+//! that from the ones I've tested.
+//!
+//! Another catch here is that step implemented as GET request. This is because I couldn't get
+//! Gotham to work with POST request to extract the data from the body.
+//!
+//! Sergei Surovsev <ssurovsev@gmail.com>
+
 use crossbeam_channel::*;
 
 use gotham::helpers::http::response::create_response;
@@ -16,17 +27,22 @@ use std::io::Cursor;
 
 use crate::{state, AIGymSettings};
 
+/// A reprsentation of agent's state (reward, terminated) in terms of bevy_rl
+/// That's not the same as the state of the environment
 #[derive(Serialize, Deserialize)]
 pub(crate) struct AgentState {
     reward: f32,
     is_terminated: bool,
 }
 
+/// This is used for deserializing agent's action from the request body
 #[derive(Serialize, Deserialize, Debug)]
 pub(crate) struct AgentAction {
     action: Option<String>,
 }
 
+/// `GothamState` is a wrapper around `AIGymState` that is used by Gotham middleware
+/// It's holds a state of the environment and settings
 #[derive(Clone, StateData)]
 pub(crate) struct GothamState<
     T: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe,
@@ -36,6 +52,7 @@ pub(crate) struct GothamState<
     pub(crate) settings: AIGymSettings,
 }
 
+/// Describes REST API routes
 pub(crate) fn router<
     T: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe,
     P: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe + serde::Serialize,
@@ -60,6 +77,7 @@ pub(crate) fn router<
     })
 }
 
+/// Return rendered visual observations as a single PNG image
 fn visual_observations<
     T: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe,
     P: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe + serde::Serialize,
@@ -99,11 +117,13 @@ fn visual_observations<
     (state, response)
 }
 
+/// Describe the query string for the step request
 #[derive(Deserialize, StateData, StaticResponseExtender)]
 struct StepQueryString {
     payload: String,
 }
 
+/// `step` API endpoint to take an action and return the next `AgentState`
 fn step<
     T: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe,
     P: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe + serde::Serialize,
@@ -154,6 +174,7 @@ fn step<
     (state, json!(agent_states).to_string())
 }
 
+/// `reset` API endpoint to reset the environment
 fn reset<
     T: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe,
     P: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe + serde::Serialize,
@@ -187,6 +208,7 @@ fn reset<
     (state, json!(agent_states).to_string())
 }
 
+/// `env_state` API endpoint to get the environment state
 fn env_state<
     T: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe,
     P: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe + serde::Serialize,
