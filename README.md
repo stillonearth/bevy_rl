@@ -23,7 +23,7 @@ Build Reinforcement Learning [Gym](https://gym.openai.com/) environments with [B
 
 ## 📝Features
 
-- Set of APIs to implement OpenAI Gym interface, such as `reset`, `step`, `render`, `close` and associated simulator states
+- Set of APIs to implement OpenAI Gym interface, such as `reset`, `step`, `render` and associated simulator states
 - Multi-Agent support
 - Rendering screen pixels to RAM buffer — for training agents with raw pixels
 - REST API to control agents
