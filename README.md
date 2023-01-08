@@ -10,7 +10,7 @@
 
 ## Reinforcement Learning for Bevy Engine
 
-🏗️ Build 🤔 Reinforcement Learning 🏋🏿‍♂️ [Gym](https://gym.openai.com/) environments with 🕊 [Bevy](https://bevyengine.org/) engine to train 👾 AI agents that 💡 can learn from 📺 screen pixels or defined obeservation state.
+Build Reinforcement Learning [Gym](https://gym.openai.com/) environments with [Bevy](https://bevyengine.org/) engine to train AI agents that can learn from screen pixels or defined obeservation state.
 
 ## Compatibility
 
@@ -22,7 +22,7 @@
 
 ## 📝Features
 
-- Set of APIs to implement OpenAI Gym interface, such as `reset`, `step`, `render`, `close` and associated simulator states
+- Set of APIs to implement OpenAI Gym interface, such as `reset`, `step`, `render` and associated simulator states
 - Multi-Agent support
 - Rendering screen pixels to RAM buffer — for training agents with raw pixels
 - REST API to control agents
