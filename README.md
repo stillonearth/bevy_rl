@@ -8,7 +8,6 @@
 ![image](https://github.com/stillonearth/bevy_rl/blob/main/img/dog.gif?raw=true)
 ![image](https://github.com/stillonearth/bevy_rl/blob/main/img/shooter.gif?raw=true)
 
-
 ## Reinforcement Learning for Bevy Engine
 
 🏗️ Build 🤔 Reinforcement Learning 🏋🏿‍♂️ [Gym](https://gym.openai.com/) environments with 🕊 [Bevy](https://bevyengine.org/) engine to train 👾 AI agents that 💡 can learn from 📺 screen pixels or defined obeservation state.
@@ -43,7 +42,7 @@ pub struct Actions {
 
 // Observation space
 #[derive(Default, Serialize, Clone)]
-pub struct EnvironmentState {
+pub struct Observations {
     // agent_coords: [(f32, f32); 16],
 }
 ```
@@ -63,7 +62,7 @@ let ai_gym_state = AIGymState::<Actions, State>::new(AIGymSettings {
     ..default()
 });
 app.insert_resource(ai_gym_state)
-    .add_plugin(AIGymPlugin::<Actions, EnvironmentState>::default());
+    .add_plugin(AIGymPlugin::<Actions, Observations>::default());
 ```
 
 ### 2.1 (Optional) Enable Rendering to Buffer
@@ -72,7 +71,7 @@ If your environment wants to export raw pixels, you will need to attach a render
 
 ```rust
 pub(crate) fn spawn_cameras(
-    ai_gym_state: Res<AIGymState<Actions, EnvironmentState>>,
+    ai_gym_state: Res<AIGymState<Actions, Observations>>,
 ) {
     let mut ai_gym_state = ai_gym_state.lock().unwrap();
     let ai_gym_settings = ai_gym_state.settings.clone();
@@ -95,7 +94,7 @@ pub(crate) fn spawn_cameras(
 
 ### 4. Handle bevy_rl events
 
-`bevy_rl` will communicate with your environment through events. You can use `EventReader` to read events and respond to them. Those event are from REST API or from a timer that pauses the simulation with given interval (`AIGymSettings.pause_interval`).
+`bevy_rl` will communicate with your environment through events. Those events initiate from REST API or `bevy_rl.SimulationPauseTimer` that pauses the simulation with given interval (`AIGymSettings.pause_interval`).
 
 | Event          | Description                        | Usage                                                                                      |
 | -------------- | ---------------------------------- | ------------------------------------------------------------------------------------------ |
@@ -115,7 +114,7 @@ fn bevy_rl_pause_request(
         // Pause simulation (physics engine)
         // ...
         // Collect state into serializable struct
-        let env_state = EnvironmentState(...);
+        let env_state = Observations(...);
         // Set bevy_rl gym state
         let mut ai_gym_state = ai_gym_state.lock().unwrap();
         ai_gym_state.set_env_state(env_state);
@@ -151,7 +150,7 @@ pub(crate) fn bevy_rl_reset_request(
     mut walls: Query<Entity, &Wall>,
     mut players: Query<(Entity, &Actor)>,
     mut simulation_state: ResMut<State<SimulationState>>,
-    ai_gym_state: Res<AIGymState<Actions, EnvironmentState>>,
+    ai_gym_state: Res<AIGymState<Actions, Observations>>,
 ) {
     if reset_event_reader.iter().count() == 0 {
         return;
@@ -193,7 +192,7 @@ Those methods are available on `AIGymState` resource. You should use them to alt
 
 ## 🌐 REST API
 
-Accessing `bevy_rl`-enabled environment is possible through REST API. You can use any HTTP client to communicate with it. Here's a list of available endpoints:
+Accessing `bevy_rl`-enabled environment is possible through REST API. Here's a list of available endpoints:
 
 | Method            | Verb     | bevy_rl version                               |
 | ----------------- | -------- | --------------------------------------------- |
@@ -202,7 +201,7 @@ Accessing `bevy_rl`-enabled environment is possible through REST API. You can us
 | Reset Environment | **POST** | `http://localhost:7878/reset`                 |
 | Step              | **GET**  | `http://localhost:7878/step` `payload=ACTION` |
 
-One would wrap those endpoints into a client library (python) to make it easier to use.
+[bevy_rl_shooter](https://github.com/stillonearth/bevy_rl_shooter) implements an example Python wrapper.
 
 ## ✍️ Examples
 
