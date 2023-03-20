@@ -4,7 +4,7 @@ use std::{marker::PhantomData, thread};
 
 use bevy::{
     prelude::*,
-    render::{view::RenderLayers, RenderApp, RenderStage},
+    render::{view::RenderLayers, RenderApp, RenderSet},
     time::{Timer, TimerMode},
 };
 
@@ -38,8 +38,9 @@ pub struct EventControl(pub Vec<Option<String>>);
 pub struct EventPause;
 
 /// States of the simulation
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Resource)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Resource, States, Default)]
 pub enum SimulationState {
+    #[default]
     Running,
     PausedForControl,
 }
@@ -61,7 +62,7 @@ impl<
     > Plugin for AIGymPlugin<T, P>
 {
     fn build(&self, app: &mut App) {
-        app.add_startup_system(setup::<T, P>.label("bevy_rl_setup_rendering"));
+        app.add_startup_system(setup::<T, P>);
 
         let ai_gym_state = app
             .world
@@ -78,7 +79,6 @@ impl<
         }
 
         // Initial state
-        app.add_state(SimulationState::Running);
 
         // Register events
         app.add_event::<EventReset>();
@@ -86,19 +86,17 @@ impl<
         app.add_event::<EventPause>();
 
         // Add system scheduling
-        app.add_system_set(
-            SystemSet::on_update(SimulationState::Running).with_system(control_switch::<T, P>),
-        );
-
-        app.add_system_set(
-            SystemSet::on_update(SimulationState::PausedForControl)
-                // Game Systems
-                .with_system(process_control_request::<T, P>) // System that parses user command
-                .with_system(process_reset_request::<T, P>), // System that performs environment state reset
-        );
+        app.add_state::<SimulationState>()
+            .add_system(control_switch::<T, P>.in_set(OnUpdate(SimulationState::Running)))
+            .add_system(
+                process_control_request::<T, P>.in_set(OnUpdate(SimulationState::PausedForControl)),
+            )
+            .add_system(
+                process_reset_request::<T, P>.in_set(OnUpdate(SimulationState::PausedForControl)),
+            );
 
         if let Ok(render_app) = app.get_sub_app_mut(RenderApp) {
-            render_app.add_system_to_stage(RenderStage::Render, copy_from_gpu_to_ram::<T, P>);
+            render_app.add_system(copy_from_gpu_to_ram::<T, P>.in_set(RenderSet::Render));
             render_app.insert_resource(ai_gym_state);
         }
     }
@@ -112,7 +110,6 @@ pub(crate) fn setup<
     mut commands: Commands,
     mut images: ResMut<Assets<Image>>,
     ai_gym_state: ResMut<state::AIGymState<T, P>>,
-    mut windows: ResMut<Windows>,
 ) {
     let ai_gym_state_locked = ai_gym_state.into_inner().clone();
     let mut ai_gym_state = ai_gym_state_locked.lock().unwrap();
@@ -149,6 +146,7 @@ pub(crate) fn setup<
                     | TextureUsages::COPY_DST
                     | TextureUsages::TEXTURE_BINDING
                     | TextureUsages::RENDER_ATTACHMENT,
+                view_formats: &[TextureFormat::Rgba8Unorm],
             },
             ..default()
         };
@@ -163,44 +161,6 @@ pub(crate) fn setup<
     commands
         .spawn(Camera2dBundle::default())
         .insert(second_pass_layer);
-
-    // Show all camera views in tiled mode
-    let window = windows.get_primary_mut().unwrap();
-    let number_of_columns = (ai_gym_settings.num_agents as f32).sqrt().ceil() as u32;
-    let number_of_rows =
-        ((ai_gym_settings.num_agents as f32) / (number_of_columns as f32)).ceil() as u32;
-    let mut frames: Vec<Handle<Image>> = Vec::new();
-    for f in ai_gym_state.render_image_handles.iter() {
-        frames.push(f.clone());
-    }
-    let offset_x = (size.width * number_of_rows / 2 - size.width / 2) as f32;
-    let offset_y = (size.height * number_of_columns / 2 - size.height / 2) as f32;
-
-    for r in 0..number_of_rows {
-        for c in 0..number_of_columns {
-            let y = (r * size.height) as f32;
-            let x = (c * size.width) as f32;
-
-            let i = (c * number_of_columns + r) as usize;
-            if i > (frames.len() - 1) {
-                continue;
-            }
-
-            commands
-                .spawn(SpriteBundle {
-                    texture: frames[i].clone(),
-                    transform: Transform::from_xyz(x - offset_x, y - offset_y, 0.0),
-                    ..default()
-                })
-                .insert(second_pass_layer);
-        }
-    }
-
-    window.set_resolution(
-        (size.width * number_of_rows) as f32,
-        (size.height * number_of_columns) as f32,
-    );
-    window.set_resizable(false);
 }
 
 /// Pausing the external world each tick
@@ -208,7 +168,7 @@ fn control_switch<
     T: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe,
     P: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe + serde::Serialize,
 >(
-    mut simulation_state: ResMut<State<SimulationState>>,
+    mut simulation_state: ResMut<NextState<SimulationState>>,
     time: Res<Time>,
     mut timer: ResMut<SimulationPauseTimer>,
     ai_gym_state: ResMut<state::AIGymState<T, P>>,
@@ -218,9 +178,7 @@ fn control_switch<
     // This controls control frequency of the environment
     if timer.0.tick(time.delta()).just_finished() {
         // Set current state to control to disable simulation systems
-        simulation_state
-            .overwrite_push(SimulationState::PausedForControl)
-            .unwrap();
+        simulation_state.set(SimulationState::PausedForControl);
 
         // Pause time in all environment
         pause_event_writer.send(EventPause);

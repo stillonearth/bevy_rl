@@ -100,6 +100,7 @@ pub(crate) fn copy_from_gpu_to_ram<
                     mip_level_count: 1,
                     sample_count: 1,
                     usage: TextureUsages::TEXTURE_BINDING | TextureUsages::COPY_DST,
+                    view_formats: &[TextureFormat::Rgba8Unorm],
                 }),
             },
             texture_extent,

@@ -5,7 +5,7 @@ use serde::Serialize;
 
 use bevy_rl::*;
 
-#[derive(Default, Clone, Serialize)]
+#[derive(Default, Clone, Serialize, Debug)]
 pub struct Agent {
     location: (f32, f32),
     health: f32,
@@ -34,7 +34,7 @@ fn bevy_rl_pause_request(
 #[allow(unused_must_use)]
 fn bevy_rl_control_request(
     mut pause_event_reader: EventReader<EventControl>,
-    mut simulation_state: ResMut<State<SimulationState>>,
+    mut simulation_state: ResMut<NextState<SimulationState>>,
     mut env_state: ResMut<EnvironmentState>,
 ) {
     for control in pause_event_reader.iter() {
@@ -50,6 +50,7 @@ fn bevy_rl_control_request(
                 }
             }
         }
+
         simulation_state.set(SimulationState::Running);
     }
 }
@@ -126,6 +127,7 @@ fn test_api_state_step() {
     // bevy_rl expects each action to be in format: {"action": string:serialized_action}
     // bevy_rl will deserialize it's internal AgentAction and your environment will need to
     // deserialize the action string to the correct type
+
     let actions: [RESTAPIAction; 5] = [
         RESTAPIAction {
             action: "DOWN".to_string(),
@@ -151,6 +153,8 @@ fn test_api_state_step() {
             .text()
             .unwrap();
 
+    std::thread::sleep(std::time::Duration::from_millis(1000));
+
     let expected_response = r#"[{"is_terminated":false,"reward":0.0},{"is_terminated":false,"reward":0.0},{"is_terminated":false,"reward":0.0},{"is_terminated":false,"reward":0.0},{"is_terminated":false,"reward":0.0}]"#;
     assert!(response == expected_response);
 
@@ -160,5 +164,6 @@ fn test_api_state_step() {
         .unwrap();
 
     let expected_response = r#"{"agents":[{"health":0.0,"location":[0.0,-1.0]},{"health":0.0,"location":[0.0,1.0]},{"health":0.0,"location":[-1.0,0.0]},{"health":0.0,"location":[1.0,0.0]},{"health":0.0,"location":[0.0,0.0]}]}"#;
+
     assert!(response == expected_response);
 }
