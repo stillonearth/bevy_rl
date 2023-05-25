@@ -38,9 +38,10 @@ pub struct EventControl(pub Vec<Option<String>>);
 pub struct EventPause;
 
 /// States of the simulation
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Resource, States, Default)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, States, Default, SystemSet)]
 pub enum SimulationState {
     #[default]
+    Initializing,
     Running,
     PausedForControl,
 }
@@ -144,7 +145,7 @@ pub(crate) fn setup<
                     | TextureUsages::COPY_DST
                     | TextureUsages::TEXTURE_BINDING
                     | TextureUsages::RENDER_ATTACHMENT,
-                view_formats: &[TextureFormat::Rgba8Unorm],
+                view_formats: &[TextureFormat::Bgra8UnormSrgb],
             },
             ..default()
         };
@@ -159,6 +160,38 @@ pub(crate) fn setup<
     commands
         .spawn(Camera2dBundle::default())
         .insert(second_pass_layer);
+
+    // Show all camera views in tiled mode
+    // let window = windows.get_primary_mut().unwrap();
+    let number_of_columns = (ai_gym_settings.num_agents as f32).sqrt().ceil() as u32;
+    let number_of_rows =
+        ((ai_gym_settings.num_agents as f32) / (number_of_columns as f32)).ceil() as u32;
+    let mut frames: Vec<Handle<Image>> = Vec::new();
+    for f in ai_gym_state.render_image_handles.iter() {
+        frames.push(f.clone());
+    }
+    let offset_x = (size.width * number_of_rows / 2 - size.width / 2) as f32;
+    let offset_y = (size.height * number_of_columns / 2 - size.height / 2) as f32;
+
+    for r in 0..number_of_rows {
+        for c in 0..number_of_columns {
+            let y = (r * size.height) as f32;
+            let x = (c * size.width) as f32;
+
+            let i = (c * number_of_columns + r) as usize;
+            if i > (frames.len() - 1) {
+                continue;
+            }
+
+            commands
+                .spawn(SpriteBundle {
+                    texture: frames[i].clone(),
+                    transform: Transform::from_xyz(x - offset_x, y - offset_y, 0.0),
+                    ..default()
+                })
+                .insert(second_pass_layer);
+        }
+    }
 }
 
 /// Pausing the external world each tick
