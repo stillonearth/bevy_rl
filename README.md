@@ -6,7 +6,6 @@
 [![Rust](https://github.com/stillonearth/bevy_rl/workflows/CI/badge.svg)](https://github.com/stillonearth/bevy_rl/actions)
 
 ![image](https://github.com/stillonearth/bevy_rl/blob/main/img/dog.gif?raw=true)
-![image](https://github.com/stillonearth/bevy_rl/blob/main/img/shooter.gif?raw=true)
 
 ## Reinforcement Learning for Bevy Engine
 
