@@ -40,8 +40,8 @@ pub struct EventPause;
 /// States of the simulation
 #[derive(Debug, Clone, Eq, PartialEq, Hash, States, Default, SystemSet)]
 pub enum SimulationState {
-    #[default]
     Initializing,
+    #[default]
     Running,
     PausedForControl,
 }
@@ -87,11 +87,12 @@ impl<
         // Add system scheduling
         app.add_state::<SimulationState>()
             .add_system(control_switch::<T, P>.in_set(OnUpdate(SimulationState::Running)))
-            .add_system(
-                process_control_request::<T, P>.in_set(OnUpdate(SimulationState::PausedForControl)),
-            )
-            .add_system(
-                process_reset_request::<T, P>.in_set(OnUpdate(SimulationState::PausedForControl)),
+            .add_systems(
+                (
+                    process_control_request::<T, P>,
+                    process_reset_request::<T, P>,
+                )
+                    .in_set(OnUpdate(SimulationState::PausedForControl)),
             );
 
         if let Ok(render_app) = app.get_sub_app_mut(RenderApp) {

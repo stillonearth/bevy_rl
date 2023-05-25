@@ -1,9 +1,6 @@
 use bevy::prelude::*;
-
-use reqwest;
-use serde::Serialize;
-
 use bevy_rl::*;
+use serde::Serialize;
 
 #[derive(Default, Clone, Serialize, Debug)]
 pub struct Agent {
@@ -32,6 +29,7 @@ fn bevy_rl_pause_request(
 }
 
 #[allow(unused_must_use)]
+#[allow(clippy::needless_range_loop)]
 fn bevy_rl_control_request(
     mut pause_event_reader: EventReader<EventControl>,
     mut simulation_state: ResMut<NextState<SimulationState>>,
@@ -107,7 +105,7 @@ fn test_api_state_step() {
     });
 
     // let bevy app start REST API
-    std::thread::sleep(std::time::Duration::from_millis(1000));
+    std::thread::sleep(std::time::Duration::from_millis(500));
 
     // Test `state` endpoint
     let response = reqwest::blocking::get("http://localhost:7878/state")
@@ -116,7 +114,7 @@ fn test_api_state_step() {
         .unwrap();
 
     let expected_response = r#"{"agents":[{"health":0.0,"location":[0.0,0.0]},{"health":0.0,"location":[0.0,0.0]},{"health":0.0,"location":[0.0,0.0]},{"health":0.0,"location":[0.0,0.0]},{"health":0.0,"location":[0.0,0.0]}]}"#;
-    assert!(response == expected_response);
+    assert_eq!(response, expected_response);
 
     // Test `step` endpoint
     #[derive(Serialize)]
