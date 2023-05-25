@@ -78,8 +78,6 @@ impl<
             )));
         }
 
-        // Initial state
-
         // Register events
         app.add_event::<EventReset>();
         app.add_event::<EventControl>();

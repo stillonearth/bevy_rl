@@ -4,9 +4,6 @@
 //! and be able to run in a separate thread. Gotham is one of the few web frameworks that can do
 //! that from the ones I've tested.
 //!
-//! Another catch here is that step implemented as GET request. This is because I couldn't get
-//! Gotham to work with POST request to extract the data from the body.
-//!
 //! Sergei Surovsev <ssurovsev@gmail.com>
 
 use crossbeam_channel::*;
@@ -72,7 +69,7 @@ pub(crate) fn router<
             .get("/step")
             .with_query_string_extractor::<StepQueryString>()
             .to(step::<T, P>);
-        route.post("/reset").to(reset::<T, P>);
+        route.get("/reset").to(reset::<T, P>);
         route.get("/state").to(env_state::<T, P>);
     })
 }

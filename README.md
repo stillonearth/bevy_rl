@@ -19,7 +19,7 @@ Build Reinforcement Learning [Gym](https://gym.openai.com/) environments with [B
 | 0.7          |      0.0.5      |
 | 0.8          |      0.8.4      |
 | 0.9          |   0.9.8-beta    |
-| 0.10         |   0.10.0-beta   |
+| 0.10         |     0.10.0      |
 
 ## 📝Features
 
@@ -195,12 +195,12 @@ Those methods are available on `AIGymState` resource. You should use them to alt
 
 Accessing `bevy_rl`-enabled environment is possible through REST API. Here's a list of available endpoints:
 
-| Method            | Verb     | bevy_rl version                               |
-| ----------------- | -------- | --------------------------------------------- |
-| Camera Pixels     | **GET**  | `http://localhost:7878/visual_observations`   |
-| State             | **GET**  | `http://localhost:7878/state`                 |
-| Reset Environment | **POST** | `http://localhost:7878/reset`                 |
-| Step              | **GET**  | `http://localhost:7878/step` `payload=ACTION` |
+| Method            | Verb    | bevy_rl version                             |
+| ----------------- | ------- | ------------------------------------------- |
+| Camera Pixels     | **GET** | `http://localhost:7878/visual_observations` |
+| State             | **GET** | `http://localhost:7878/state`               |
+| Reset Environment | **GET** | `http://localhost:7878/reset`               |
+| Step              | **GET** | `http://localhost:7878/step?payload=ACTION` |
 
 [bevy_rl_shooter](https://github.com/stillonearth/bevy_rl_shooter) implements an example Python wrapper.
 
