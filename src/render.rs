@@ -8,7 +8,6 @@ use bevy::{
         renderer::{RenderDevice, RenderQueue},
     },
 };
-use std::num::NonZeroU32;
 
 use bytemuck;
 use image;
@@ -20,14 +19,13 @@ use crate::state;
 fn texture_image_layout(desc: &TextureDescriptor<'_>) -> ImageDataLayout {
     let size = desc.size;
 
+    let width = size.width * desc.format.block_dimensions().0;
+    let height = size.width * desc.format.block_dimensions().1;
+
     ImageDataLayout {
-        bytes_per_row: if size.height > 1 {
-            NonZeroU32::new(size.width * (desc.format.describe().block_size as u32))
-        } else {
-            None
-        },
+        bytes_per_row: if size.height > 1 { Some(width) } else { None },
         rows_per_image: if size.depth_or_array_layers > 1 {
-            NonZeroU32::new(size.height)
+            Some(height)
         } else {
             None
         },

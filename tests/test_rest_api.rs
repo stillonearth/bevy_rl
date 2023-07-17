@@ -63,9 +63,9 @@ fn start_bevy_app() {
 
     // Basic bevy setup
     app.add_plugins(MinimalPlugins);
-    app.add_plugin(WindowPlugin::default());
-    app.add_plugin(AssetPlugin::default());
-    app.add_plugin(ImagePlugin::default());
+    app.add_plugins(WindowPlugin::default());
+    app.add_plugins(AssetPlugin::default());
+    app.add_plugins(ImagePlugin::default());
 
     // Setup bevy_rl
     let ai_gym_state = AIGymState::<Actions, EnvironmentState>::new(AIGymSettings {
@@ -75,14 +75,14 @@ fn start_bevy_app() {
         ..default()
     });
     app.insert_resource(ai_gym_state)
-        .add_plugin(AIGymPlugin::<Actions, EnvironmentState>::default());
+        .add_plugins(AIGymPlugin::<Actions, EnvironmentState>::default());
 
     // initialize app state
     app.insert_resource(initial_state);
 
     // bevy_rl events
-    app.add_system(bevy_rl_pause_request);
-    app.add_system(bevy_rl_control_request);
+    app.add_systems(Update, bevy_rl_pause_request);
+    app.add_systems(Update, bevy_rl_control_request);
 
     // Run for 1M frames
     for _ in 0..1000000 {

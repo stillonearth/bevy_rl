@@ -18,7 +18,8 @@ Build Reinforcement Learning [Gym](https://gym.openai.com/) environments with [B
 | 0.7          |      0.0.5      |
 | 0.8          |      0.8.4      |
 | 0.9          |   0.9.8-beta    |
-| 0.10         |     0.10.0      |
+| 0.10         |      0.10       |
+| 0.11         |   0.11.0-beta   |
 
 ## 📝Features
 
@@ -62,7 +63,7 @@ let ai_gym_state = AIGymState::<Actions, State>::new(AIGymSettings {
     ..default()
 });
 app.insert_resource(ai_gym_state)
-    .add_plugin(AIGymPlugin::<Actions, Observations>::default());
+    .add_plugins(AIGymPlugin::<Actions, Observations>::default());
 ```
 
 ### 2.1 (Optional) Enable Rendering to Buffer
@@ -170,11 +171,13 @@ pub(crate) fn bevy_rl_reset_request(
 Register systems to handle bevy_rl events.
 
 ```rust
-app.add_system_set(
-    SystemSet::on_update(SimulationState::PausedForControl)
+app.add_systems(
+    Update,
+    (
         .with_system(bevy_rl_control_request)
         .with_system(bevy_rl_reset_request)
         .with_system(bevy_rl_pause_request),
+    ).in_set(SimulationState::PausedForControl)
 );
 ```
 

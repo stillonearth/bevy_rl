@@ -29,12 +29,15 @@ pub struct AIGymSettings {
 }
 
 /// This event is fired when user calls `reset` method of the REST API
+#[derive(Event)]
 pub struct EventReset;
 
 /// This event is fired when user calls `step` method of the REST API
+#[derive(Event)]
 pub struct EventControl(pub Vec<Option<String>>);
 
 /// This event is fired when an internal timer would need to pause the simulation
+#[derive(Event)]
 pub struct EventPause;
 
 /// States of the simulation
@@ -63,7 +66,7 @@ impl<
     > Plugin for AIGymPlugin<T, P>
 {
     fn build(&self, app: &mut App) {
-        app.add_startup_system(setup::<T, P>);
+        app.add_systems(Startup, setup::<T, P>);
 
         let ai_gym_state = app
             .world
@@ -86,17 +89,24 @@ impl<
 
         // Add system scheduling
         app.add_state::<SimulationState>()
-            .add_system(control_switch::<T, P>.in_set(OnUpdate(SimulationState::Running)))
             .add_systems(
+                Update,
+                control_switch::<T, P>.in_set(SimulationState::Running),
+            )
+            .add_systems(
+                Update,
                 (
                     process_control_request::<T, P>,
                     process_reset_request::<T, P>,
                 )
-                    .in_set(OnUpdate(SimulationState::PausedForControl)),
+                    .in_set(SimulationState::PausedForControl),
             );
 
         if let Ok(render_app) = app.get_sub_app_mut(RenderApp) {
-            render_app.add_system(copy_from_gpu_to_ram::<T, P>.in_set(RenderSet::Render));
+            render_app.add_systems(
+                Update,
+                copy_from_gpu_to_ram::<T, P>.in_set(RenderSet::Render),
+            );
             render_app.insert_resource(ai_gym_state);
         }
     }

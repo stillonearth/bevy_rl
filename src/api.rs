@@ -130,8 +130,8 @@ fn step<
     let query_param = StepQueryString::take_from(&mut state);
 
     let err = serde_json::from_str::<Vec<AgentAction>>(&query_param.payload).err();
-    if err.is_some() {
-        return (state, err.unwrap().to_string());
+    if let Some(message) = err {
+        return (state, message.to_string());
     }
     let agent_actions: Vec<AgentAction> = serde_json::from_str(&query_param.payload).unwrap();
 
