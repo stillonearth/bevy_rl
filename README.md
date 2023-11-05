@@ -20,6 +20,7 @@ Build Reinforcement Learning [Gym](https://gym.openai.com/) environments with [B
 | 0.9          |   0.9.8-beta    |
 | 0.10         |      0.10       |
 | 0.11         |   0.11.0-beta   |
+| 0.12         |   0.12.0   |
 
 ## 📝Features
 

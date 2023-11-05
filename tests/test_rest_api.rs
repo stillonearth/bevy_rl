@@ -22,7 +22,7 @@ fn bevy_rl_pause_request(
     ai_gym_state: Res<AIGymState<Actions, EnvironmentState>>,
     env_state: Res<EnvironmentState>,
 ) {
-    for _ in pause_event_reader.iter() {
+    for _ in pause_event_reader.read() {
         let mut ai_gym_state = ai_gym_state.lock().unwrap();
         ai_gym_state.set_env_state(env_state.clone());
     }
@@ -35,7 +35,7 @@ fn bevy_rl_control_request(
     mut simulation_state: ResMut<NextState<SimulationState>>,
     mut env_state: ResMut<EnvironmentState>,
 ) {
-    for control in pause_event_reader.iter() {
+    for control in pause_event_reader.read() {
         let unparsed_actions = &control.0;
         for i in 0..unparsed_actions.len() {
             if let Some(unparsed_action) = unparsed_actions[i].clone() {
