@@ -9,8 +9,6 @@ use bevy::{
     },
 };
 
-use bytemuck;
-use image;
 use wgpu::ImageCopyBuffer;
 use wgpu::ImageDataLayout;
 

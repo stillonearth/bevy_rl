@@ -5,7 +5,6 @@ use std::{marker::PhantomData, thread};
 use bevy::{
     prelude::*,
     render::{view::RenderLayers, RenderApp, RenderSet},
-    time::{Timer, TimerMode},
 };
 
 mod api;
@@ -88,7 +87,7 @@ impl<
         app.add_event::<EventPause>();
 
         // Add system scheduling
-        app.add_state::<SimulationState>()
+        app.insert_state(SimulationState::Initializing)
             .add_systems(
                 Update,
                 control_switch::<T, P>.in_set(SimulationState::Running),

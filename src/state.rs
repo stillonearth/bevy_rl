@@ -1,7 +1,5 @@
 use std::sync::{Arc, Mutex};
 
-use image;
-
 use bevy::prelude::*;
 use crossbeam_channel::*;
 
