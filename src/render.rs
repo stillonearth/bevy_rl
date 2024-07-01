@@ -6,6 +6,7 @@ use bevy::{
             Extent3d, TextureDescriptor, TextureDimension, TextureFormat, TextureUsages,
         },
         renderer::{RenderDevice, RenderQueue},
+        texture::GpuImage,
     },
 };
 
@@ -37,7 +38,7 @@ pub(crate) fn copy_from_gpu_to_ram<
     T: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe,
     P: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe + serde::Serialize,
 >(
-    gpu_images: Res<RenderAssets<Image>>,
+    gpu_images: Res<RenderAssets<GpuImage>>,
     render_device: Res<RenderDevice>,
     render_queue: Res<RenderQueue>,
     ai_gym_state: Res<state::AIGymState<T, P>>,

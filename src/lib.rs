@@ -68,7 +68,7 @@ impl<
         app.add_systems(Startup, setup::<T, P>);
 
         let ai_gym_state = app
-            .world
+            .world()
             .get_resource::<state::AIGymState<T, P>>()
             .unwrap()
             .clone();
@@ -101,13 +101,13 @@ impl<
                     .in_set(SimulationState::PausedForControl),
             );
 
-        if let Ok(render_app) = app.get_sub_app_mut(RenderApp) {
-            render_app.add_systems(
-                Update,
-                copy_from_gpu_to_ram::<T, P>.in_set(RenderSet::Render),
-            );
-            render_app.insert_resource(ai_gym_state);
-        }
+        let render_app = app.get_sub_app_mut(RenderApp).unwrap();
+
+        render_app.add_systems(
+            Update,
+            copy_from_gpu_to_ram::<T, P>.in_set(RenderSet::Render),
+        );
+        render_app.insert_resource(ai_gym_state);
     }
 }
 
@@ -169,7 +169,7 @@ pub(crate) fn setup<
 
     commands
         .spawn(Camera2dBundle::default())
-        .insert(second_pass_layer);
+        .insert(second_pass_layer.clone());
 
     // Show all camera views in tiled mode
     // let window = windows.get_primary_mut().unwrap();
@@ -199,7 +199,7 @@ pub(crate) fn setup<
                     transform: Transform::from_xyz(x - offset_x, y - offset_y, 0.0),
                     ..default()
                 })
-                .insert(second_pass_layer);
+                .insert(second_pass_layer.clone());
         }
     }
 }

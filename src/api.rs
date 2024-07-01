@@ -106,7 +106,7 @@ fn visual_observations<
     }
 
     all_agents_image
-        .write_to(&mut Cursor::new(&mut bytes), image::ImageOutputFormat::Png)
+        .write_to(&mut Cursor::new(&mut bytes), image::ImageFormat::Png)
         .unwrap();
 
     let response = create_response::<Vec<u8>>(&state, StatusCode::OK, mime::IMAGE_PNG, bytes);
