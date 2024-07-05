@@ -1,14 +1,14 @@
 [package]
 edition = "2021"
 name = "bevy_rl"
-version = "0.14.0-rc.1"
+version = "0.14.0"
 license = "MIT OR Apache-2.0"
 description = "Build environments for reinforcement learning with bevy"
 keywords = ["ai", "bevy", "gym", "rl"]
 repository = "https://github.com/stillonearth/bevy_rl"
 
 [dependencies]
-bevy = { version = "0.14.0-rc.4" }
+bevy = { version = "0.14.0" }
 bytemuck = "1.12.3"
 crossbeam = "0.8.2"
 crossbeam-channel = "0.5.6"
