@@ -195,7 +195,7 @@ pub(crate) fn setup<
 
             commands
                 .spawn(SpriteBundle {
-                    texture: frames[i].clone(),
+                    sprite: frames[i].clone().into(),
                     transform: Transform::from_xyz(x - offset_x, y - offset_y, 0.0),
                     ..default()
                 })

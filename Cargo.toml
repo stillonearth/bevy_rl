@@ -8,19 +8,20 @@ keywords = ["ai", "bevy", "gym", "rl"]
 repository = "https://github.com/stillonearth/bevy_rl"
 
 [dependencies]
-bevy = { version = "0.14.0" }
+# bevy = { version = "0.14.0" }
+bevy = {git="https://github.com/bevyengine/bevy/", rev="e14c15f1216aea50b176c2cab1c1d2322a69c1c6"}
 bytemuck = "1.12.3"
 crossbeam = "0.8.2"
 crossbeam-channel = "0.5.6"
 futures = "0.3.23"
 gotham = "0.7.1"
-hyper = "0.14.20" # this dependencie is due to gotham no longer in development
+hyper = "0.14.20" # version is old because gotham no longer in development
 image = "0.25.1"
 mime = "0.3.16"
 serde = "1.0.89"
 serde_derive = "1.0.143"
 serde_json = "1.0.83"
-wgpu = "0.20.1"
+wgpu = "22.1.0"
 
 [dev-dependencies]
 bitflags = "2.0.2"
