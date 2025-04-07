@@ -137,7 +137,7 @@ fn step<
 
     let state_: &GothamState<T, P> = GothamState::borrow_from(&state);
     let step_request_tx: Sender<Vec<Option<String>>>;
-    let setp_result_rx: Receiver<Vec<bool>>;
+    let step_result_rx: Receiver<Vec<bool>>;
 
     if agent_actions.len() != state_.settings.num_agents as usize {
         return (state, "Invalid number of actions".to_string());
@@ -146,7 +146,7 @@ fn step<
     {
         let ai_gym_state = state_.inner.lock().unwrap();
         step_request_tx = ai_gym_state.step_request_tx.clone();
-        setp_result_rx = ai_gym_state.step_result_rx.clone();
+        step_result_rx = ai_gym_state.step_result_rx.clone();
     }
 
     let actions = agent_actions
@@ -155,7 +155,8 @@ fn step<
         .collect();
 
     step_request_tx.send(actions).unwrap();
-    setp_result_rx.recv().unwrap();
+
+    step_result_rx.recv().unwrap();
 
     let mut agent_states: Vec<AgentState> = Vec::new();
     {

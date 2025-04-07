@@ -88,17 +88,14 @@ impl<
 
         // Add system scheduling
         app.insert_state(SimulationState::Initializing)
-            .add_systems(
-                Update,
-                control_switch::<T, P>.in_set(SimulationState::Running),
-            )
+            .add_systems(Update, (control_switch::<T, P>))
             .add_systems(
                 Update,
                 (
                     process_control_request::<T, P>,
                     process_reset_request::<T, P>,
                 )
-                    .in_set(SimulationState::PausedForControl),
+                    .run_if(in_state(SimulationState::PausedForControl)),
             );
 
         let render_app = app.get_sub_app_mut(RenderApp).unwrap();
@@ -129,7 +126,12 @@ pub(crate) fn setup<
         settings: ai_gym_settings.clone(),
     });
 
-    thread::spawn(move || gotham::start("127.0.0.1:7878", handler));
+    thread::spawn(move || {
+        let result = gotham::start("127.0.0.1:7878", handler);
+        if result.is_err() {
+            panic!("{:?}", result.err());
+        }
+    });
 
     if !ai_gym_settings.render_to_buffer {
         return;
@@ -209,27 +211,27 @@ fn control_switch<
     T: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe,
     P: 'static + Send + Sync + Clone + std::panic::RefUnwindSafe + serde::Serialize,
 >(
+    current_simulation_state: Res<State<SimulationState>>,
     mut simulation_state: ResMut<NextState<SimulationState>>,
     time: Res<Time>,
     mut timer: ResMut<SimulationPauseTimer>,
     ai_gym_state: ResMut<state::AIGymState<T, P>>,
     mut pause_event_writer: EventWriter<EventPause>,
 ) {
-    let ai_gym_settings = ai_gym_state.lock().unwrap().settings.clone();
+    // let ai_gym_settings = ai_gym_state.lock().unwrap().settings.clone();
     // This controls control frequency of the environment
     if timer.0.tick(time.delta()).just_finished() {
-        // Set current state to control to disable simulation systems
-        simulation_state.set(SimulationState::PausedForControl);
-
-        // Pause time in all environment
-        pause_event_writer.send(EventPause);
-
-        // ai_gym_state is behind arc mutex, so we need to lock it
-        let ai_gym_state = ai_gym_state.lock().unwrap();
-
-        // This will tell bevy_rl that environment is ready to receive actions
-        let results = (0..ai_gym_settings.num_agents).map(|_| true).collect();
-        ai_gym_state.send_step_result(results);
+        if *current_simulation_state.get() == SimulationState::Running {
+            // Set current state to control to disable simulation systems
+            simulation_state.set(SimulationState::PausedForControl);
+            // Pause time in all environment
+            pause_event_writer.send(EventPause);
+            // ai_gym_state is behind arc mutex, so we need to lock it
+            // let ai_gym_state = ai_gym_state.lock().unwrap();
+            // This will tell bevy_rl that environment is ready to receive actions
+            // let results = (0..ai_gym_settings.num_agents).map(|_| true).collect();
+            // ai_gym_state.send_step_result(results);
+        }
     }
 }
 
@@ -260,7 +262,6 @@ pub(crate) fn process_control_request<
     mut control_event_writer: EventWriter<EventControl>,
 ) {
     let ai_gym_state = ai_gym_state.lock().unwrap();
-
     // Drop the system if users hasn't sent request this frame
     if !ai_gym_state.is_next_action() {
         return;
