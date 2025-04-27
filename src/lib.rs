@@ -88,7 +88,7 @@ impl<
 
         // Add system scheduling
         app.insert_state(SimulationState::Initializing)
-            .add_systems(Update, (control_switch::<T, P>))
+            .add_systems(Update, control_switch::<T, P>)
             .add_systems(
                 Update,
                 (
@@ -170,7 +170,7 @@ pub(crate) fn setup<
     let second_pass_layer = RenderLayers::layer(1);
 
     commands
-        .spawn(Camera2dBundle::default())
+        .spawn(Camera2d::default())
         .insert(second_pass_layer.clone());
 
     // Show all camera views in tiled mode
@@ -196,9 +196,9 @@ pub(crate) fn setup<
             }
 
             commands
-                .spawn(SpriteBundle {
-                    sprite: frames[i].clone().into(),
-                    transform: Transform::from_xyz(x - offset_x, y - offset_y, 0.0),
+                .spawn(Sprite {
+                    image: frames[i].clone().into(),
+                    custom_size: Some(Vec2::new(x - offset_x, y - offset_y)),
                     ..default()
                 })
                 .insert(second_pass_layer.clone());
@@ -215,7 +215,6 @@ fn control_switch<
     mut simulation_state: ResMut<NextState<SimulationState>>,
     time: Res<Time>,
     mut timer: ResMut<SimulationPauseTimer>,
-    ai_gym_state: ResMut<state::AIGymState<T, P>>,
     mut pause_event_writer: EventWriter<EventPause>,
 ) {
     // let ai_gym_settings = ai_gym_state.lock().unwrap().settings.clone();
@@ -225,7 +224,7 @@ fn control_switch<
             // Set current state to control to disable simulation systems
             simulation_state.set(SimulationState::PausedForControl);
             // Pause time in all environment
-            pause_event_writer.send(EventPause);
+            pause_event_writer.write(EventPause);
             // ai_gym_state is behind arc mutex, so we need to lock it
             // let ai_gym_state = ai_gym_state.lock().unwrap();
             // This will tell bevy_rl that environment is ready to receive actions
@@ -250,7 +249,7 @@ pub(crate) fn process_reset_request<
     }
 
     ai_gym_state.receive_reset_request();
-    reset_event_writer.send(EventReset);
+    reset_event_writer.write(EventReset);
 }
 
 /// This is called when user calls step() in the REST api
@@ -268,5 +267,5 @@ pub(crate) fn process_control_request<
     }
 
     let unparsed_actions = ai_gym_state.receive_action_strings();
-    control_event_writer.send(EventControl(unparsed_actions));
+    control_event_writer.write(EventControl(unparsed_actions));
 }

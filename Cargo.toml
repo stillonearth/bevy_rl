@@ -1,30 +1,30 @@
 [package]
 edition = "2021"
 name = "bevy_rl"
-version = "0.15.1"
+version = "0.16.0"
 license = "MIT OR Apache-2.0"
 description = "Build environments for reinforcement learning with bevy"
 keywords = ["ai", "bevy", "gym", "rl"]
 repository = "https://github.com/stillonearth/bevy_rl"
 
 [dependencies]
-bevy = "0.15"
-bytemuck = "1.20.0"
+bevy = "0.16"
+bytemuck = "1.22"
 crossbeam = "0.8.2"
-crossbeam-channel = "0.5.6"
+crossbeam-channel = "0.5.15"
 futures = "0.3.23"
 gotham = "0.7.1"
-hyper = "0.14.20" # version is old because gotham no longer in development
-image = "0.25.5"
-mime = "0.3.16"
-serde = "1.0.215"
-serde_derive = "1.0.215"
-serde_json = "1.0.133"
-wgpu = "23.0.1"
+hyper = "0.14.20"            # version is old because gotham no longer in development
+image = "0.25"
+mime = "0.3"
+serde = "1.0"
+serde_derive = "1.0"
+serde_json = "1.0"
+wgpu = "24"
 
 [dev-dependencies]
 bitflags = "2.6.0"
-reqwest = { version = "0.12.9", features = ["blocking"] }
+reqwest = { version = "0.12", features = ["blocking"] }
 
 [profile.dev]
 opt-level = 3

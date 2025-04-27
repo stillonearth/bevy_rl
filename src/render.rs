@@ -10,18 +10,18 @@ use bevy::{
     },
 };
 
-use wgpu::ImageCopyBuffer;
-use wgpu::ImageDataLayout;
+use wgpu::TexelCopyBufferInfo;
+use wgpu::TexelCopyBufferLayout;
 
 use crate::state;
 
-fn texture_image_layout(desc: &TextureDescriptor<'_>) -> ImageDataLayout {
+fn texture_image_layout(desc: &TextureDescriptor<'_>) -> TexelCopyBufferLayout {
     let size = desc.size;
 
     let width = size.width * desc.format.block_dimensions().0;
     let height = size.width * desc.format.block_dimensions().1;
 
-    ImageDataLayout {
+    TexelCopyBufferLayout {
         bytes_per_row: if size.height > 1 { Some(width) } else { None },
         rows_per_image: if size.depth_or_array_layers > 1 {
             Some(height)
@@ -87,7 +87,7 @@ pub(crate) fn copy_from_gpu_to_ram<
 
         encoder.copy_texture_to_buffer(
             texture.as_image_copy(),
-            ImageCopyBuffer {
+            TexelCopyBufferInfo {
                 buffer: &destination,
                 layout: texture_image_layout(&TextureDescriptor {
                     label: None,
